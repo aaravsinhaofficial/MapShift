@@ -20,9 +20,10 @@ The repository currently contains:
 - benchmark planning and documentation
 - a Python package scaffold for the benchmark codebase
 - canonical draft release configs and machine-readable config schemas
-- minimal validation and smoke-test entry points
+- a first executable config-driven 2D path for generation, intervention, and task sampling
+- validation and smoke-test entry points
 
-The environment generators, interventions, tasks, baselines, and analyses are scaffolded but not yet fully implemented.
+The 2D generator, intervention families, and task sampler now have a working first path. The broader simulator, baselines, runners, and analysis stack remain partially scaffolded.
 
 ## Quickstart
 
