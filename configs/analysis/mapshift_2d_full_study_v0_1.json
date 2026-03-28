@@ -1,0 +1,22 @@
+{
+  "schema_version": "0.1.0",
+  "study_name": "mapshift_2d_full_study_v0_1",
+  "benchmark_config": "../benchmark/release_v0_1.json",
+  "baseline_run_configs": [
+    "../calibration/oracle_post_intervention_planner_v0_1.json",
+    "../calibration/weak_heuristic_baseline_v0_1.json",
+    "../calibration/monolithic_recurrent_world_model_v0_1.json"
+  ],
+  "sample_count_per_motif": 1,
+  "task_samples_per_class": 1,
+  "severity_levels": [0, 1, 2, 3],
+  "protocol_names": [
+    "cep",
+    "same_environment",
+    "no_exploration",
+    "short_horizon",
+    "long_horizon"
+  ],
+  "min_cell_coverage": 1,
+  "output_subdir": "outputs/studies/mapshift_2d_full_study_v0_1"
+}

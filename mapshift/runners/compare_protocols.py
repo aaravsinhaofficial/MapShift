@@ -44,17 +44,12 @@ def run_protocol_comparison_suite(
     severity_levels: Sequence[int] = (0, 1, 2, 3),
     motif_tags: Sequence[str] | None = None,
     family_names: Sequence[str] | None = None,
+    protocol_names: Sequence[str] | None = None,
 ) -> ProtocolComparisonReport:
     """Run the configured protocol comparisons for the current release bundle."""
 
     protocol_reports: dict[str, CalibrationReport] = {}
-    required_protocols = {
-        "cep",
-        "same_environment",
-        "no_exploration",
-        "short_horizon",
-        "long_horizon",
-    }
+    required_protocols = tuple(protocol_names or ("cep", "same_environment", "no_exploration", "short_horizon", "long_horizon"))
     for protocol_name in sorted(required_protocols):
         protocol_reports[protocol_name] = run_calibration_suite(
             release_bundle=release_bundle,
@@ -67,12 +62,14 @@ def run_protocol_comparison_suite(
             family_names=family_names,
         )
 
-    pairwise = {
-        "same_environment_vs_cep": _compare_two_reports(protocol_reports["same_environment"], protocol_reports["cep"]),
-        "no_exploration_vs_reward_free_exploration": _compare_two_reports(protocol_reports["no_exploration"], protocol_reports["cep"]),
-        "short_horizon_vs_long_horizon": _compare_two_reports(protocol_reports["short_horizon"], protocol_reports["long_horizon"]),
-    }
-    pooled_vs_familywise = _compare_pooled_vs_familywise(protocol_reports["cep"])
+    pairwise = {}
+    if "same_environment" in protocol_reports and "cep" in protocol_reports:
+        pairwise["same_environment_vs_cep"] = _compare_two_reports(protocol_reports["same_environment"], protocol_reports["cep"])
+    if "no_exploration" in protocol_reports and "cep" in protocol_reports:
+        pairwise["no_exploration_vs_reward_free_exploration"] = _compare_two_reports(protocol_reports["no_exploration"], protocol_reports["cep"])
+    if "short_horizon" in protocol_reports and "long_horizon" in protocol_reports:
+        pairwise["short_horizon_vs_long_horizon"] = _compare_two_reports(protocol_reports["short_horizon"], protocol_reports["long_horizon"])
+    pooled_vs_familywise = _compare_pooled_vs_familywise(protocol_reports["cep"]) if "cep" in protocol_reports else {}
     protocol_payloads = {name: report.to_dict() for name, report in protocol_reports.items()}
     return ProtocolComparisonReport(
         release_name=release_bundle.root.release_name,
@@ -112,6 +109,28 @@ def _compare_two_reports(left: CalibrationReport, right: CalibrationReport) -> d
     right_order = list(right.ranking_summary["pooled_supplementary_orders"][0]["order"])
     left_best = left_order[0] if left_order else ""
     right_best = right_order[0] if right_order else ""
+    left_family_orders = {
+        str(row["family"]): list(row["order"])
+        for row in left.ranking_summary["family_orders"]
+        if row["protocol_name"] == left.protocol_name
+    }
+    right_family_orders = {
+        str(row["family"]): list(row["order"])
+        for row in right.ranking_summary["family_orders"]
+        if row["protocol_name"] == right.protocol_name
+    }
+    family_rank_changes = []
+    for family in sorted(set(left_family_orders) & set(right_family_orders)):
+        if left_family_orders[family] != right_family_orders[family]:
+            family_rank_changes.append(
+                {
+                    "family": family,
+                    "left_order": left_family_orders[family],
+                    "right_order": right_family_orders[family],
+                    "kendall_tau": kendall_tau(left_family_orders[family], right_family_orders[family]),
+                    "rank_reversals": rank_reversals(left_family_orders[family], right_family_orders[family]),
+                }
+            )
     return {
         "left_protocol": left.protocol_name,
         "right_protocol": right.protocol_name,
@@ -122,6 +141,7 @@ def _compare_two_reports(left: CalibrationReport, right: CalibrationReport) -> d
         "left_best_method": left_best,
         "right_best_method": right_best,
         "rank_reversals": rank_reversals(left_order, right_order) if left_order and right_order else [],
+        "family_rank_changes": family_rank_changes,
     }
 
 

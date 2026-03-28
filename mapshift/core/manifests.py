@@ -83,3 +83,14 @@ class RunManifest(ArtifactManifest):
     protocol_name: str = ""
     baseline_family: str = ""
     environment_ids: List[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class StudyManifest(ArtifactManifest):
+    """Provenance for a full benchmark study bundle."""
+
+    study_name: str = ""
+    release_name: str = ""
+    protocol_names: List[str] = field(default_factory=list)
+    baseline_names: List[str] = field(default_factory=list)
+    artifact_paths: Dict[str, str] = field(default_factory=dict)

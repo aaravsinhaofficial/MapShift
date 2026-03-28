@@ -6,7 +6,7 @@ import math
 import random
 from dataclasses import asdict, dataclass
 from statistics import mean, median
-from typing import Callable, Iterable, Sequence, TypeVar
+from typing import Callable, Iterable, Mapping, Sequence, TypeVar
 
 T = TypeVar("T")
 
@@ -83,6 +83,35 @@ def stddev_or_zero(values: Sequence[float | int]) -> float:
     numeric_values = [float(value) for value in values]
     average = sum(numeric_values) / len(numeric_values)
     return math.sqrt(sum((value - average) ** 2 for value in numeric_values) / len(numeric_values))
+
+
+def pearson_correlation(left: Sequence[float | int], right: Sequence[float | int]) -> float:
+    """Return Pearson correlation for two numeric vectors."""
+
+    if len(left) != len(right) or len(left) < 2:
+        return 0.0
+    left_values = [float(value) for value in left]
+    right_values = [float(value) for value in right]
+    left_mean = sum(left_values) / len(left_values)
+    right_mean = sum(right_values) / len(right_values)
+    left_var = sum((value - left_mean) ** 2 for value in left_values)
+    right_var = sum((value - right_mean) ** 2 for value in right_values)
+    if left_var <= 0.0 or right_var <= 0.0:
+        return 0.0
+    covariance = sum((left_value - left_mean) * (right_value - right_mean) for left_value, right_value in zip(left_values, right_values))
+    return covariance / math.sqrt(left_var * right_var)
+
+
+def correlation_matrix(rows: Mapping[str, Sequence[float | int]]) -> dict[str, dict[str, float]]:
+    """Return a symmetric Pearson correlation matrix for named vectors."""
+
+    names = sorted(rows)
+    matrix: dict[str, dict[str, float]] = {}
+    for left_name in names:
+        matrix[left_name] = {}
+        for right_name in names:
+            matrix[left_name][right_name] = pearson_correlation(rows[left_name], rows[right_name])
+    return matrix
 
 
 def histogram_counts(values: Sequence[float | int], bin_edges: Sequence[float | int]) -> dict[str, int]:

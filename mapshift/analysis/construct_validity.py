@@ -90,6 +90,8 @@ def generate_mapshift_2d_benchmark_health_report(
     sample_count_per_motif: int = 1,
     task_samples_per_class: int = 1,
     min_cell_coverage: int = 1,
+    motif_tags: Iterable[str] | None = None,
+    family_names: Iterable[str] | None = None,
 ) -> BenchmarkHealthReport:
     """Generate a deterministic benchmark-health report for MapShift-2D."""
 
@@ -103,7 +105,8 @@ def generate_mapshift_2d_benchmark_health_report(
     severity_magnitude_records: list[dict[str, Any]] = []
     task_records: list[dict[str, Any]] = []
 
-    motifs = list(release_bundle.env2d.motif_families)
+    motifs = list(motif_tags or release_bundle.env2d.motif_families)
+    selected_families = tuple(family_names or release_bundle.interventions.canonical_family_order)
     for motif_index, motif in enumerate(motifs):
         for sample_index in range(sample_count_per_motif):
             seed = (motif_index + 1) * 100 + sample_index
@@ -114,7 +117,7 @@ def generate_mapshift_2d_benchmark_health_report(
                 environment_validation_issues.append({"environment_id": base_environment.environment_id, "issues": issues})
             environment_diagnostics.append(analyze_map2d_environment(base_environment))
 
-            for family in release_bundle.interventions.canonical_family_order:
+            for family in selected_families:
                 intervention = build_intervention(family, release_bundle.interventions.families[family])
                 for severity in range(4):
                     result = intervention.apply(base_environment, severity=severity, seed=seed + severity)
@@ -198,11 +201,15 @@ def generate_mapshift_2d_benchmark_health_report(
         intervention_records=intervention_records,
         release_bundle=release_bundle,
         min_cell_coverage=min_cell_coverage,
+        motifs=tuple(motifs),
+        families=selected_families,
     )
     task_coverage = _summarize_task_coverage(
         task_records=task_records,
         release_bundle=release_bundle,
         min_cell_coverage=min_cell_coverage,
+        motifs=tuple(motifs),
+        families=selected_families,
     )
     task_difficulty = _summarize_task_difficulty(task_records)
     validator_summary = _summarize_validator_outputs(
@@ -285,11 +292,13 @@ def _summarize_intervention_coverage(
     intervention_records: list[dict[str, Any]],
     release_bundle: ReleaseBundle,
     min_cell_coverage: int,
+    motifs: tuple[str, ...] | None = None,
+    families: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     expected_values = {
-        "family": release_bundle.interventions.canonical_family_order,
+        "family": families or release_bundle.interventions.canonical_family_order,
         "severity": tuple(range(4)),
-        "motif": release_bundle.env2d.motif_families,
+        "motif": motifs or release_bundle.env2d.motif_families,
         "split": ("train", "val", "test"),
     }
     family_severity = summarize_family_severity_counts(intervention_records)
@@ -313,11 +322,13 @@ def _summarize_task_coverage(
     task_records: list[dict[str, Any]],
     release_bundle: ReleaseBundle,
     min_cell_coverage: int,
+    motifs: tuple[str, ...] | None = None,
+    families: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     expected_values = {
-        "family": release_bundle.interventions.canonical_family_order,
+        "family": families or release_bundle.interventions.canonical_family_order,
         "severity": tuple(range(4)),
-        "motif": release_bundle.env2d.motif_families,
+        "motif": motifs or release_bundle.env2d.motif_families,
         "task_class": tuple(class_name for class_name, config in release_bundle.tasks.classes.items() if config.enabled),
         "split": ("train", "val", "test"),
     }
