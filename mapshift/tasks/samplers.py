@@ -11,6 +11,7 @@ from typing import Any
 from mapshift.core.manifests import TaskManifest
 from mapshift.core.schemas import TaskConfig
 from mapshift.envs.map2d.state import Map2DEnvironment
+from mapshift.splits.motifs import task_template_metadata
 
 from .adaptation import AdaptationTask
 from .inference import InferenceTask
@@ -84,7 +85,16 @@ class TaskSampler:
                 config_hash=_config_hash(self.config),
                 parent_ids=[base_environment.environment_id, intervened_environment.environment_id],
                 seed_values=[seed],
-                metadata={"family": family},
+                metadata={
+                    "family": family,
+                    "task_template_id": task.metadata.get("task_template_id"),
+                    "query_template_id": task.metadata.get("query_template_id"),
+                    "budget_template_id": task.metadata.get("budget_template_id"),
+                    "start_goal_template_id": task.metadata.get("start_goal_template_id"),
+                    "start_role_template_id": task.metadata.get("start_role_template_id"),
+                    "goal_role_template_id": task.metadata.get("goal_role_template_id"),
+                    "distance_steps": task.metadata.get("distance_steps"),
+                },
                 task_id=f"{selected_class}-{intervened_environment.environment_id}-{seed}",
                 task_class=selected_class,
                 task_type=task.task_type,
@@ -184,6 +194,16 @@ class TaskSampler:
             dynamics_changed=dynamics_changed,
             metric_changed=metric_changed,
         )
+        template_metadata = task_template_metadata(
+            environment=intervened_environment,
+            task_class="planning",
+            task_type=task_type,
+            family=family,
+            start_node_id=start_node,
+            goal_node_id=goal_node,
+            goal_token=goal_token,
+            horizon_steps=horizon,
+        )
 
         return PlanningTask(
             task_type=task_type,
@@ -197,6 +217,7 @@ class TaskSampler:
                 "base_path_length": before,
                 "intervened_path_length": after,
                 "path_changed": before != after,
+                **template_metadata,
             },
         )
 
@@ -208,6 +229,7 @@ class TaskSampler:
         rng: random.Random,
     ) -> InferenceTask:
         cfg = self.config.classes["inference"]
+        horizon_steps = int(rng.choice(cfg.canonical_horizon_steps))
         topology_changed = base_environment.edge_list() != intervened_environment.edge_list()
         semantic_changed = base_environment.semantic_signature() != intervened_environment.semantic_signature()
         changed_token = self._changed_goal_token(base_environment, intervened_environment)
@@ -235,6 +257,16 @@ class TaskSampler:
             semantic_changed=semantic_changed,
             changed_token=changed_token,
         )
+        template_metadata = task_template_metadata(
+            environment=intervened_environment,
+            task_class="inference",
+            task_type=task_type,
+            family=family,
+            start_node_id=None,
+            goal_node_id=None,
+            expected_output_type=expected_output_type,
+            horizon_steps=horizon_steps,
+        )
 
         return InferenceTask(
             task_type=task_type,
@@ -242,7 +274,7 @@ class TaskSampler:
             query=query,
             expected_output_type=expected_output_type,
             expected_answer=expected_answer,
-            metadata={"horizon_steps": rng.choice(cfg.canonical_horizon_steps)},
+            metadata={"horizon_steps": horizon_steps, **template_metadata},
         )
 
     def _sample_adaptation(
@@ -273,6 +305,16 @@ class TaskSampler:
             metric_changed=metric_changed,
             dynamics_changed=dynamics_changed,
         )
+        template_metadata = task_template_metadata(
+            environment=intervened_environment,
+            task_class="adaptation",
+            task_type=task_type,
+            family=family,
+            start_node_id=intervened_environment.start_node_id,
+            goal_node_id=goal_node,
+            adaptation_budget_steps=budget,
+            horizon_steps=budget,
+        )
 
         return AdaptationTask(
             task_type=task_type,
@@ -281,7 +323,7 @@ class TaskSampler:
             evaluation_horizon_steps=budget,
             start_node_id=intervened_environment.start_node_id,
             goal_node_id=goal_node,
-            metadata={"base_environment_id": base_environment.environment_id},
+            metadata={"base_environment_id": base_environment.environment_id, **template_metadata},
         )
 
     def _changed_goal_token(self, base_environment: Map2DEnvironment, intervened_environment: Map2DEnvironment) -> str | None:

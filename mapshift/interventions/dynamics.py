@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from mapshift.envs.map2d.state import Map2DEnvironment
+from mapshift.splits.motifs import stable_template_hash
 
 from .base import BaseIntervention, InterventionResult
 
@@ -22,6 +23,15 @@ class DynamicsIntervention(BaseIntervention):
             "severity": severity,
             "value": severity_value,
             "operations": list(operations),
+            "dynamics_template_id": stable_template_hash(
+                {
+                    "family": "dynamics",
+                    "severity": severity,
+                    "friction": round(transformed.dynamics.friction, 6),
+                    "inertial_lag": round(transformed.dynamics.inertial_lag, 6),
+                    "action_asymmetry": round(transformed.dynamics.action_asymmetry, 6),
+                }
+            ),
         }
 
         manifest = self._build_manifest(environment, transformed, severity, severity_value, seed)

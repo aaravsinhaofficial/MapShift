@@ -10,6 +10,7 @@ from typing import Any
 
 from mapshift.core.manifests import EnvironmentManifest
 from mapshift.core.schemas import Env2DConfig
+from mapshift.splits.motifs import semantic_template_metadata, structural_signature_for_environment
 
 from .dynamics import DynamicsParameters2D
 from .state import AgentPose2D, Cell, Map2DEnvironment, Map2DNode, _edge_key, _orthogonal_path
@@ -156,6 +157,15 @@ class Map2DGenerator:
         motif = motif_tag or self.config.motif_families[seed % len(self.config.motif_families)]
         split_name = self._split_for_motif(motif)
         environment = self._build_environment(motif=motif, split_name=split_name, seed=seed, rng=rng)
+        structural_signature = structural_signature_for_environment(environment)
+        semantic_metadata = semantic_template_metadata(environment)
+        environment.metadata.update(
+            {
+                "motif_tags": list(structural_signature.motif_tags),
+                "structural_signature": structural_signature.to_dict(),
+                **semantic_metadata,
+            }
+        )
         manifest = EnvironmentManifest(
             artifact_id=f"env-artifact-{environment.environment_id}",
             artifact_type="environment",
@@ -164,13 +174,18 @@ class Map2DGenerator:
             config_hash=self._config_hash(),
             environment_id=environment.environment_id,
             tier="mapshift_2d",
-            motif_tags=[motif],
+            motif_tags=list(structural_signature.motif_tags),
             split_name=split_name,
             metadata={
                 "node_count": environment.node_count(),
                 "edge_count": environment.edge_count(),
                 "free_cell_count": environment.free_cell_count(),
                 "geometry_scale": environment.geometry_scale,
+                "motif_tag": motif,
+                "motif_family": environment.metadata.get("motif_family", ""),
+                "motif_tags": list(structural_signature.motif_tags),
+                "structural_signature": structural_signature.to_dict(),
+                **semantic_metadata,
                 "serialized_environment": environment.to_dict(),
             },
             seed_values=[seed],

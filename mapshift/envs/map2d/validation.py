@@ -177,6 +177,12 @@ def validate_map2d_instance(environment: Any) -> list[str]:
             issues.append(f"landmark references missing node {node_id}")
     if not environment.reachable(environment.start_node_id, environment.goal_node_id):
         issues.append("start and goal are not connected")
+    if "motif_tags" not in environment.metadata:
+        issues.append("environment metadata missing motif_tags")
+    if "structural_signature" not in environment.metadata:
+        issues.append("environment metadata missing structural_signature")
+    if "semantic_template_id" not in environment.metadata:
+        issues.append("environment metadata missing semantic_template_id")
     serialized = environment.to_dict()
     replayed = Map2DEnvironment.from_dict(serialized)
     if replayed.to_dict() != serialized:

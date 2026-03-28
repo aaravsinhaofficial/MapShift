@@ -13,6 +13,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from mapshift.core.schemas import ConfigValidationError, load_release_bundle
+from mapshift.splits.builders import build_canonical_release_split_bundle
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,8 +37,18 @@ def main() -> int:
         print(f"Config validation failed: {exc}", file=sys.stderr)
         return 1
 
-    print(json.dumps(bundle.summary(), indent=2, sort_keys=True))
-    return 0
+    split_bundle = build_canonical_release_split_bundle(bundle, sample_count_per_motif=1, task_samples_per_class=1)
+    summary = bundle.summary() | {
+        "split_validation_ok": split_bundle.ok,
+        "split_validation_issues": list(split_bundle.validation_issues),
+        "split_warning_count": len(split_bundle.leakage_report.warnings),
+        "split_error_count": len(split_bundle.leakage_report.errors),
+        "split_environment_counts": {
+            split_name: len(manifest.environment_ids) for split_name, manifest in sorted(split_bundle.manifests.items())
+        },
+    }
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0 if split_bundle.ok else 1
 
 
 if __name__ == "__main__":

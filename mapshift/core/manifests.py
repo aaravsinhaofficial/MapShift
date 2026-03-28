@@ -65,6 +65,16 @@ class TaskManifest(ArtifactManifest):
 
 
 @dataclass(frozen=True)
+class SplitManifest(ArtifactManifest):
+    """Canonical split artifact describing one release partition."""
+
+    split_name: str = ""
+    tier: str = ""
+    environment_ids: List[str] = field(default_factory=list)
+    release_name: str = ""
+
+
+@dataclass(frozen=True)
 class RunManifest(ArtifactManifest):
     """Provenance for a model run under a benchmark protocol."""
 

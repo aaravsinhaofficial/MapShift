@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from mapshift.envs.map2d.state import Map2DEnvironment
+from mapshift.splits.motifs import stable_template_hash
 
 from .base import BaseIntervention, InterventionResult
 
@@ -13,6 +14,7 @@ class TopologyIntervention(BaseIntervention):
     def apply(self, environment: Map2DEnvironment, severity: int, seed: int) -> InterventionResult:
         severity_value, operations = self._severity_config(severity)
         transformed = environment.clone(environment_id=f"{environment.environment_id}-topology-s{severity}")
+        self._invalidate_cached_metadata(transformed, invalidate_structural=True, invalidate_semantic=True)
         applied_operations: list[str] = []
         protected_edges: set[tuple[str, str]] = set()
 
@@ -62,6 +64,14 @@ class TopologyIntervention(BaseIntervention):
             "configured_operations": list(operations),
             "applied_operations": applied_operations,
             "edge_count": transformed.edge_count(),
+            "topology_template_id": stable_template_hash(
+                {
+                    "family": "topology",
+                    "severity": severity,
+                    "applied_operations": applied_operations,
+                    "edge_count": transformed.edge_count(),
+                }
+            ),
         }
 
         manifest = self._build_manifest(environment, transformed, severity, severity_value, seed)

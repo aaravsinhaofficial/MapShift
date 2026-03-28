@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from mapshift.envs.map2d.state import Map2DEnvironment
+from mapshift.splits.motifs import stable_template_hash
 
 from .base import BaseIntervention, InterventionResult
 
@@ -23,6 +24,15 @@ class MetricIntervention(BaseIntervention):
             "severity": severity,
             "value": severity_value,
             "operations": list(operations),
+            "metric_template_id": stable_template_hash(
+                {
+                    "family": "metric",
+                    "severity": severity,
+                    "geometry_scale": round(transformed.geometry_scale, 6),
+                    "forward_gain": round(transformed.dynamics.forward_gain, 6),
+                    "observation_radius_m": round(transformed.observation_radius_m, 6),
+                }
+            ),
         }
 
         manifest = self._build_manifest(environment, transformed, severity, severity_value, seed)

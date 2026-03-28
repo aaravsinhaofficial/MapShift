@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from mapshift.envs.map2d.state import Map2DEnvironment
+from mapshift.splits.motifs import semantic_remap_template_id
 
 from .base import BaseIntervention, InterventionResult
 
@@ -21,6 +22,7 @@ class SemanticIntervention(BaseIntervention):
     def apply(self, environment: Map2DEnvironment, severity: int, seed: int) -> InterventionResult:
         severity_value, operations = self._severity_config(severity)
         transformed = environment.clone(environment_id=f"{environment.environment_id}-semantic-s{severity}")
+        self._invalidate_cached_metadata(transformed, invalidate_semantic=True)
 
         token_names = sorted(transformed.goal_tokens)
         token_active_count = min(len(token_names), severity + 1)
@@ -41,6 +43,7 @@ class SemanticIntervention(BaseIntervention):
             "severity": severity,
             "value": severity_value,
             "operations": list(operations),
+            "semantic_remap_template_id": semantic_remap_template_id(environment, transformed),
         }
 
         manifest = self._build_manifest(environment, transformed, severity, severity_value, seed)

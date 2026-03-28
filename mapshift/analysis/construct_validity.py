@@ -17,6 +17,7 @@ from mapshift.interventions.validators import (
     validate_intervention_pair,
 )
 from mapshift.metrics.statistics import NumericSummary, histogram_counts, mean_or_zero, proportion_true, summarize_numeric
+from mapshift.splits.builders import build_canonical_release_split_bundle
 from mapshift.tasks.samplers import TaskSampler, TaskSamplingRejected
 
 
@@ -184,7 +185,15 @@ def generate_mapshift_2d_benchmark_health_report(
                             task_records.append(task_record)
 
     environment_health = summarize_environment_diagnostics(environment_diagnostics)
+    split_bundle = build_canonical_release_split_bundle(
+        release_bundle=release_bundle,
+        sample_count_per_motif=sample_count_per_motif,
+        task_samples_per_class=task_samples_per_class,
+    )
     split_health = _summarize_split_health(environment_diagnostics)
+    split_health["canonical_split_coverage"] = split_bundle.coverage_summary
+    split_health["canonical_split_validation_issues"] = list(split_bundle.validation_issues)
+    split_health["canonical_split_leakage_report"] = split_bundle.leakage_report.to_dict()
     intervention_coverage = _summarize_intervention_coverage(
         intervention_records=intervention_records,
         release_bundle=release_bundle,
