@@ -1,0 +1,10 @@
+{
+  "schema_version": "0.1.0",
+  "run_name": "weak_heuristic_baseline_mapshift_2d_v0_1",
+  "baseline_name": "weak_heuristic_baseline",
+  "seed": 0,
+  "exploration_budget_steps": 800,
+  "parameters": {
+    "planner": "orthogonal_visible_path"
+  }
+}

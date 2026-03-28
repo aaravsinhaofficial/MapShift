@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the canonical MapShift protocol-comparison analyses."""
+"""Generate a family-wise calibration report for the first MapShift baselines."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from mapshift.core.schemas import load_release_bundle
-from mapshift.runners.compare_protocols import run_protocol_comparison_suite
+from mapshift.runners.evaluate import run_calibration_suite
 
 
 def main() -> int:
@@ -31,14 +31,14 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
 
-    bundle = load_release_bundle(args.config)
+    release_bundle = load_release_bundle(args.config)
     run_configs = args.run_configs or [
         "configs/calibration/oracle_post_intervention_planner_v0_1.json",
         "configs/calibration/weak_heuristic_baseline_v0_1.json",
         "configs/calibration/monolithic_recurrent_world_model_v0_1.json",
     ]
-    report = run_protocol_comparison_suite(
-        release_bundle=bundle,
+    report = run_calibration_suite(
+        release_bundle=release_bundle,
         baseline_run_configs=run_configs,
         sample_count_per_motif=args.samples_per_motif,
         task_samples_per_class=args.task_samples_per_class,

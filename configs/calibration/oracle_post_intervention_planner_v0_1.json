@@ -1,0 +1,8 @@
+{
+  "schema_version": "0.1.0",
+  "run_name": "oracle_post_intervention_planner_mapshift_2d_v0_1",
+  "baseline_name": "oracle_post_intervention_planner",
+  "seed": 0,
+  "exploration_budget_steps": 800,
+  "parameters": {}
+}
