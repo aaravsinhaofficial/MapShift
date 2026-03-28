@@ -140,8 +140,8 @@ class SplitControlTests(unittest.TestCase):
         self.assertIn("intervention_family_severity_counts", train_summary)
         self.assertEqual(train_summary["environment_count"], 3)
         self.assertEqual(len(train_summary["missing_task_cells"]), 0)
-        self.assertEqual(len(val_summary["missing_task_cells"]), 1)
-        self.assertEqual(len(test_summary["missing_task_cells"]), 1)
+        self.assertEqual(len(val_summary["missing_task_cells"]), 0)
+        self.assertEqual(len(test_summary["missing_task_cells"]), 0)
 
     def test_release_split_validation_fails_on_intentional_leakage(self) -> None:
         bundle = load_release_bundle(ROOT_CONFIG)

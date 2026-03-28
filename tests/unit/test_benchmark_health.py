@@ -138,6 +138,30 @@ class BenchmarkHealthTests(unittest.TestCase):
         )
         self.assertIn("topology shift changed semantic assignments", malformed_validation.issues)
 
+    def test_topology_sampler_chooses_route_affected_pair(self) -> None:
+        bundle = load_release_bundle(ROOT_CONFIG)
+        generator = build_generator(bundle)
+        sampler = TaskSampler(bundle.tasks)
+        base_environment = generator.generate(seed=200, motif_tag="two_room_connector").environment
+
+        intervention = build_intervention("topology", bundle.interventions.families["topology"])
+        transformed_environment = intervention.apply(base_environment, severity=1, seed=201).environment
+        sampled = sampler.sample(
+            base_environment=base_environment,
+            intervened_environment=transformed_environment,
+            family="topology",
+            seed=77,
+            task_class="planning",
+        )
+
+        self.assertEqual(sampled.task.family, "topology")
+        self.assertIn(sampled.task.task_type, {"shortest_path_to_target", "reroute_after_blockage"})
+        self.assertTrue(sampled.task.metadata["route_changed"])
+        self.assertTrue(
+            sampled.task.metadata["path_changed"]
+            or sampled.task.metadata["distance_delta"] is not None
+        )
+
     def test_release_benchmark_health_report_is_stable(self) -> None:
         bundle = load_release_bundle(ROOT_CONFIG)
         report = generate_mapshift_2d_benchmark_health_report(
@@ -152,9 +176,9 @@ class BenchmarkHealthTests(unittest.TestCase):
         self.assertEqual(report.intervention_coverage["undercovered_cells"], [])
         self.assertEqual(report.validator_summary["failed_intervention_count"], 0)
         self.assertEqual(report.validator_summary["severity_monotonicity_failures"], [])
-        self.assertEqual(report.rejection_statistics["rejections_by_reason"], {"topology_no_reroute_required": 15})
-        self.assertEqual(len(report.task_coverage["undercovered_cells"]), 15)
-        self.assertEqual(report.task_difficulty["task_count"], 369)
+        self.assertEqual(report.rejection_statistics["rejections_by_reason"], {})
+        self.assertEqual(report.task_coverage["undercovered_cells"], [])
+        self.assertEqual(report.task_difficulty["task_count"], 384)
 
         for family, severity_counts in report.intervention_coverage["family_severity_table"].items():
             self.assertEqual(severity_counts, {"0": 8, "1": 8, "2": 8, "3": 8}, family)

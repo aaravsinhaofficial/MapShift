@@ -48,6 +48,18 @@ class ConfigDrivenPipelineTests(unittest.TestCase):
 
         self.assertNotEqual(base_environment.edge_list(), intervened.environment.edge_list())
 
+        sampler = TaskSampler(bundle.tasks)
+        sampled = sampler.sample(
+            base_environment=base_environment,
+            intervened_environment=intervened.environment,
+            family="topology",
+            seed=199,
+            task_class="planning",
+        )
+
+        self.assertTrue(sampled.task.metadata["route_changed"])
+        self.assertEqual(sampled.manifest.metadata["route_changed"], sampled.task.metadata["route_changed"])
+
 
 if __name__ == "__main__":
     unittest.main()

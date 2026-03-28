@@ -94,6 +94,9 @@ class TaskSampler:
                     "start_role_template_id": task.metadata.get("start_role_template_id"),
                     "goal_role_template_id": task.metadata.get("goal_role_template_id"),
                     "distance_steps": task.metadata.get("distance_steps"),
+                    "path_changed": task.metadata.get("path_changed"),
+                    "route_changed": task.metadata.get("route_changed"),
+                    "distance_delta": task.metadata.get("distance_delta"),
                 },
                 task_id=f"{selected_class}-{intervened_environment.environment_id}-{seed}",
                 task_class=selected_class,
@@ -150,6 +153,7 @@ class TaskSampler:
         horizon = rng.choice(cfg.canonical_horizon_steps)
         start_node = intervened_environment.start_node_id
         goal_node = intervened_environment.goal_node_id
+        comparison_goal_node = goal_node
         goal_token: str | None = None
 
         topology_changed = base_environment.edge_list() != intervened_environment.edge_list()
@@ -157,20 +161,39 @@ class TaskSampler:
         semantic_changed = base_environment.semantic_signature() != intervened_environment.semantic_signature()
         changed_token = self._changed_goal_token(base_environment, intervened_environment)
         metric_changed = self._metric_changed(base_environment, intervened_environment)
+        route_changed = False
 
-        if family == "topology" and topology_changed and "reroute_after_blockage" in cfg.task_types:
-            task_type = "reroute_after_blockage"
+        if family == "topology" and topology_changed:
+            topology_pair = self._select_topology_planning_pair(base_environment, intervened_environment)
+            if topology_pair is None:
+                self._reject(
+                    family=family,
+                    task_class="planning",
+                    task_type="reroute_after_blockage",
+                    reason="topology_no_reroute_required",
+                    details={
+                        "environment_id": intervened_environment.environment_id,
+                        "applied_operations": list(intervened_environment.metadata.get("topology_shift", {}).get("applied_operations", [])),
+                    },
+                )
+            start_node = str(topology_pair["start_node_id"])
+            goal_node = str(topology_pair["goal_node_id"])
+            comparison_goal_node = goal_node
+            route_changed = bool(topology_pair["route_changed"])
+            task_type = self._topology_planning_task_type(cfg, intervened_environment, topology_pair)
         elif family == "dynamics" and dynamics_changed and "reach_target_changed_dynamics" in cfg.task_types:
             task_type = "reach_target_changed_dynamics"
         elif family == "semantic" and semantic_changed and changed_token and "navigate_changed_cue_semantics" in cfg.task_types:
             task_type = "navigate_changed_cue_semantics"
             goal_token = changed_token
             goal_node = intervened_environment.goal_tokens[goal_token]
+            comparison_goal_node = base_environment.goal_tokens.get(goal_token, goal_node)
             if goal_node == start_node:
                 alternative_tokens = [token for token, node_id in intervened_environment.goal_tokens.items() if node_id != start_node]
                 if alternative_tokens:
                     goal_token = alternative_tokens[0]
                     goal_node = intervened_environment.goal_tokens[goal_token]
+                    comparison_goal_node = base_environment.goal_tokens.get(goal_token, goal_node)
                 else:
                     self._reject(
                         family=family,
@@ -182,8 +205,12 @@ class TaskSampler:
         else:
             task_type = "shortest_path_to_target"
 
-        before = base_environment.shortest_path_length(base_environment.start_node_id, base_environment.goal_node_id)
+        before_path = base_environment.shortest_path(start_node, comparison_goal_node)
+        after_path = intervened_environment.shortest_path(start_node, goal_node)
+        before = base_environment.shortest_path_length(start_node, comparison_goal_node)
         after = intervened_environment.shortest_path_length(start_node, goal_node)
+        if family != "topology":
+            route_changed = tuple(before_path or ()) != tuple(after_path or ())
         self._ensure_planning_eligible(
             family=family,
             task_type=task_type,
@@ -193,6 +220,7 @@ class TaskSampler:
             semantic_changed=semantic_changed,
             dynamics_changed=dynamics_changed,
             metric_changed=metric_changed,
+            route_changed=route_changed,
         )
         template_metadata = task_template_metadata(
             environment=intervened_environment,
@@ -217,6 +245,9 @@ class TaskSampler:
                 "base_path_length": before,
                 "intervened_path_length": after,
                 "path_changed": before != after,
+                "route_changed": route_changed,
+                "comparison_goal_node_id": comparison_goal_node,
+                "distance_delta": None if before is None or after is None else after - before,
                 **template_metadata,
             },
         )
@@ -338,6 +369,98 @@ class TaskSampler:
             or abs(base_environment.observation_radius_m - intervened_environment.observation_radius_m) > 1e-9
         )
 
+    def _select_topology_planning_pair(
+        self,
+        base_environment: Map2DEnvironment,
+        intervened_environment: Map2DEnvironment,
+    ) -> dict[str, Any] | None:
+        candidates = self._topology_planning_candidates(base_environment, intervened_environment)
+        if not candidates:
+            return None
+
+        topology_metadata = intervened_environment.metadata.get("topology_shift", {})
+        applied_operations = [str(item) for item in topology_metadata.get("applied_operations", [])]
+        prefer_degraded_paths = any(
+            operation.startswith("remove_edge:") or operation.startswith("remove_aux_edge:")
+            for operation in applied_operations
+        )
+        if prefer_degraded_paths:
+            degraded = [
+                candidate
+                for candidate in candidates
+                if candidate["distance_delta"] is not None and float(candidate["distance_delta"]) > 1e-9
+            ]
+            if degraded:
+                candidates = degraded
+        candidates.sort(
+            key=lambda item: (
+                -int(bool(item["connectivity_gain"])),
+                -float(item["absolute_distance_delta"]),
+                -int(item["path_cell_delta"]),
+                str(item["start_node_id"]),
+                str(item["goal_node_id"]),
+            )
+        )
+        return candidates[0]
+
+    def _topology_planning_candidates(
+        self,
+        base_environment: Map2DEnvironment,
+        intervened_environment: Map2DEnvironment,
+    ) -> list[dict[str, Any]]:
+        candidates: list[dict[str, Any]] = []
+        node_ids = sorted(intervened_environment.nodes)
+        for start_index, start_node in enumerate(node_ids):
+            for goal_node in node_ids[start_index + 1 :]:
+                before_path = base_environment.shortest_path(start_node, goal_node)
+                after_path = intervened_environment.shortest_path(start_node, goal_node)
+                if after_path is None:
+                    continue
+                route_changed = tuple(before_path or ()) != tuple(after_path or ())
+                if not route_changed:
+                    continue
+                before_distance = base_environment.shortest_path_length(start_node, goal_node)
+                after_distance = intervened_environment.shortest_path_length(start_node, goal_node)
+                if after_distance is None or after_distance <= 0.0:
+                    continue
+                distance_delta = None
+                absolute_distance_delta = 0.0
+                if before_distance is not None:
+                    distance_delta = after_distance - before_distance
+                    absolute_distance_delta = abs(distance_delta)
+                elif after_distance is not None:
+                    absolute_distance_delta = float(after_distance)
+                path_cell_delta = len(set(before_path or ()) ^ set(after_path or ()))
+                candidates.append(
+                    {
+                        "start_node_id": start_node,
+                        "goal_node_id": goal_node,
+                        "before_distance": before_distance,
+                        "after_distance": after_distance,
+                        "distance_delta": distance_delta,
+                        "absolute_distance_delta": absolute_distance_delta,
+                        "route_changed": route_changed,
+                        "path_cell_delta": path_cell_delta,
+                        "connectivity_gain": before_path is None and after_path is not None,
+                    }
+                )
+        return candidates
+
+    def _topology_planning_task_type(
+        self,
+        planning_config: Any,
+        intervened_environment: Map2DEnvironment,
+        topology_pair: dict[str, Any],
+    ) -> str:
+        applied_operations = [str(item) for item in intervened_environment.metadata.get("topology_shift", {}).get("applied_operations", [])]
+        has_removal = any(
+            operation.startswith("remove_edge:") or operation.startswith("remove_aux_edge:")
+            for operation in applied_operations
+        )
+        if has_removal and topology_pair["route_changed"] and "reroute_after_blockage" in planning_config.task_types:
+            return "reroute_after_blockage"
+        return "shortest_path_to_target"
+
     def _ensure_planning_eligible(
         self,
         family: str,
@@ -348,6 +471,7 @@ class TaskSampler:
         semantic_changed: bool,
         dynamics_changed: bool,
         metric_changed: bool,
+        route_changed: bool,
     ) -> None:
         if after_distance is None:
             self._reject(family, "planning", task_type, "impossible_path", {"after_distance": after_distance})
@@ -357,15 +481,21 @@ class TaskSampler:
         if after_distance is not None and after_distance <= trivial_threshold:
             self._reject(family, "planning", task_type, "trivial_goal_already_solved", {"after_distance": after_distance})
 
-        if task_type == "reroute_after_blockage" and before_distance == after_distance:
-            self._reject(family, "planning", task_type, "topology_no_reroute_required", {"before_distance": before_distance, "after_distance": after_distance})
+        if task_type == "reroute_after_blockage" and not route_changed:
+            self._reject(
+                family,
+                "planning",
+                task_type,
+                "topology_no_reroute_required",
+                {"before_distance": before_distance, "after_distance": after_distance},
+            )
         if task_type == "navigate_changed_cue_semantics" and not semantic_changed:
             self._reject(family, "planning", task_type, "semantic_no_counterfactual_change", {})
         if task_type == "reach_target_changed_dynamics" and not dynamics_changed:
             self._reject(family, "planning", task_type, "dynamics_no_transition_change", {})
         if family == "metric" and task_type != "shortest_path_to_target" and not metric_changed:
             self._reject(family, "planning", task_type, "metric_no_geometry_change", {})
-        if task_type == "shortest_path_to_target" and family == "topology" and topology_changed and before_distance == after_distance:
+        if task_type == "shortest_path_to_target" and family == "topology" and topology_changed and not route_changed:
             self._reject(family, "planning", task_type, "uninformative_no_material_change", {"before_distance": before_distance, "after_distance": after_distance})
 
     def _ensure_inference_eligible(
