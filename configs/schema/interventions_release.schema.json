@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mapshift.local/schemas/interventions_release.schema.json",
+  "title": "MapShift Intervention Release Config",
+  "type": "object",
+  "required": ["schema_version", "canonical_family_order", "families"],
+  "properties": {
+    "schema_version": { "type": "string", "minLength": 1 },
+    "canonical_family_order": {
+      "type": "array",
+      "prefixItems": [
+        { "const": "metric" },
+        { "const": "topology" },
+        { "const": "dynamics" },
+        { "const": "semantic" }
+      ],
+      "items": false
+    },
+    "families": {
+      "type": "object",
+      "required": ["metric", "topology", "dynamics", "semantic"],
+      "properties": {
+        "metric": { "$ref": "#/$defs/family_config" },
+        "topology": { "$ref": "#/$defs/family_config" },
+        "dynamics": { "$ref": "#/$defs/family_config" },
+        "semantic": { "$ref": "#/$defs/family_config" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "family_config": {
+      "type": "object",
+      "required": ["severity_parameter", "severity_levels", "preserve", "expected_failures", "validator_invariants"],
+      "properties": {
+        "severity_parameter": { "type": "string", "minLength": 1 },
+        "severity_levels": {
+          "type": "object",
+          "required": ["0", "1", "2", "3"],
+          "properties": {
+            "0": { "$ref": "#/$defs/severity_level" },
+            "1": { "$ref": "#/$defs/severity_level" },
+            "2": { "$ref": "#/$defs/severity_level" },
+            "3": { "$ref": "#/$defs/severity_level" }
+          },
+          "additionalProperties": false
+        },
+        "preserve": { "$ref": "#/$defs/non_empty_string_array" },
+        "expected_failures": { "$ref": "#/$defs/non_empty_string_array" },
+        "validator_invariants": { "$ref": "#/$defs/non_empty_string_array" }
+      },
+      "additionalProperties": false
+    },
+    "severity_level": {
+      "type": "object",
+      "required": ["value", "interventions"],
+      "properties": {
+        "value": { "type": "number" },
+        "interventions": { "$ref": "#/$defs/non_empty_string_array" }
+      },
+      "additionalProperties": false
+    },
+    "non_empty_string_array": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    }
+  }
+}

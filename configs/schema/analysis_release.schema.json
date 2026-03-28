@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mapshift.local/schemas/analysis_release.schema.json",
+  "title": "MapShift Analysis Release Config",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "primary_metrics",
+    "secondary_metrics",
+    "health_metrics",
+    "bootstrap",
+    "protocol_comparisons",
+    "core_figures",
+    "core_tables"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "minLength": 1 },
+    "primary_metrics": { "$ref": "#/$defs/non_empty_string_array" },
+    "secondary_metrics": { "$ref": "#/$defs/non_empty_string_array" },
+    "health_metrics": { "$ref": "#/$defs/non_empty_string_array" },
+    "bootstrap": {
+      "type": "object",
+      "required": ["resamples", "confidence_level", "paired_by"],
+      "properties": {
+        "resamples": { "type": "integer", "minimum": 1 },
+        "confidence_level": { "type": "number", "exclusiveMinimum": 0.0, "exclusiveMaximum": 1.0 },
+        "paired_by": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "protocol_comparisons": { "$ref": "#/$defs/non_empty_string_array" },
+    "core_figures": { "$ref": "#/$defs/non_empty_string_array" },
+    "core_tables": { "$ref": "#/$defs/non_empty_string_array" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "non_empty_string_array": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    }
+  }
+}

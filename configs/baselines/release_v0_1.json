@@ -1,0 +1,51 @@
+{
+  "schema_version": "0.1.0",
+  "fairness": {
+    "match_exploration_budget": true,
+    "shared_validation_protocol": true,
+    "freeze_hparams_before_test": true,
+    "report_compute_and_params": true
+  },
+  "system_families": [
+    {
+      "name": "monolithic_recurrent_world_model",
+      "enabled": true,
+      "category": "recurrent",
+      "notes": "Generic strong baseline without explicit memory partitioning."
+    },
+    {
+      "name": "persistent_memory_world_model",
+      "enabled": true,
+      "category": "memory_augmented",
+      "notes": "Memory-heavy baseline for long-horizon partial observability."
+    },
+    {
+      "name": "structured_dynamics_world_model",
+      "enabled": true,
+      "category": "structured_dynamics",
+      "notes": "Baseline emphasizing structured transition dynamics."
+    },
+    {
+      "name": "relational_graph_world_model",
+      "enabled": true,
+      "category": "relational",
+      "notes": "Sparse relational baseline for embodied structure."
+    },
+    {
+      "name": "prismx_reference_model",
+      "enabled": true,
+      "category": "reference_structured",
+      "notes": "Reference structured model for mechanism-level diagnosis."
+    }
+  ],
+  "sanity_baselines": [
+    "oracle_post_intervention_planner",
+    "same_environment_upper_baseline",
+    "weak_heuristic_baseline"
+  ],
+  "seed_counts": {
+    "pilot": 2,
+    "main": 5,
+    "bootstrap_reporting": 5
+  }
+}

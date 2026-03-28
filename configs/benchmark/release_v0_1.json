@@ -1,0 +1,50 @@
+{
+  "schema_version": "0.1.0",
+  "benchmark_name": "MapShift",
+  "benchmark_version": "0.1-draft",
+  "release_name": "mapshift_release_v0_1",
+  "status": "draft",
+  "primary_tier": "mapshift_2d",
+  "supported_tiers": [
+    "mapshift_2d",
+    "mapshift_3d"
+  ],
+  "config_refs": {
+    "env2d": "../env2d/release_v0_1.json",
+    "env3d": "../env3d/release_v0_1.json",
+    "interventions": "../interventions/release_v0_1.json",
+    "tasks": "../tasks/release_v0_1.json",
+    "baselines": "../baselines/release_v0_1.json",
+    "analysis": "../analysis/release_v0_1.json"
+  },
+  "freeze": {
+    "scientific_spec": [
+      "supported_claims",
+      "unsupported_claims",
+      "formal_cep_definition",
+      "intervention_families",
+      "task_classes",
+      "reporting_hierarchy",
+      "split_policy_principles",
+      "hypotheses_h1_to_h4"
+    ],
+    "protocol": [
+      "canonical_t_exp",
+      "canonical_horizon_distribution",
+      "severity_ladders",
+      "task_sampler_policy",
+      "environment_generator_grammar",
+      "split_rules",
+      "primary_metrics",
+      "episode_termination_rules"
+    ],
+    "final_evaluation": [
+      "baseline_roster",
+      "hyperparameter_policy",
+      "seed_counts",
+      "bootstrap_procedure",
+      "figure_templates",
+      "table_templates"
+    ]
+  }
+}

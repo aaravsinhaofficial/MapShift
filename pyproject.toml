@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mapshift"
+version = "0.1.0"
+description = "MapShift benchmark scaffold for Counterfactual Embodied Planning"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "MapShift Authors" }]
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["mapshift*"]

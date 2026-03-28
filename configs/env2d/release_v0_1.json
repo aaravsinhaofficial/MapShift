@@ -1,0 +1,56 @@
+{
+  "schema_version": "0.1.0",
+  "tier": "mapshift_2d",
+  "generator_name": "mapshift_2d_generator_v1",
+  "map_size_cells": [96, 96],
+  "occupancy_resolution_m": 0.25,
+  "pose_mode": "continuous",
+  "action_space": {
+    "name": "semi_continuous_nav_v1",
+    "forward_step_m": 0.25,
+    "turn_angle_deg": 15.0
+  },
+  "observation": {
+    "mode": "egocentric_local",
+    "radius_m": 3.5,
+    "field_of_view_deg": 100.0,
+    "semantic_channels": true
+  },
+  "motif_families": [
+    "simple_loop",
+    "two_room_connector",
+    "branching_chain",
+    "asymmetric_multi_room_chain",
+    "offset_bottleneck",
+    "nested_bottleneck",
+    "deceptive_shortcut",
+    "disconnected_subregion"
+  ],
+  "splits": {
+    "train_motifs": [
+      "simple_loop",
+      "two_room_connector",
+      "branching_chain"
+    ],
+    "val_motifs": [
+      "asymmetric_multi_room_chain",
+      "offset_bottleneck"
+    ],
+    "test_motifs": [
+      "nested_bottleneck",
+      "deceptive_shortcut",
+      "disconnected_subregion"
+    ]
+  },
+  "exploration": {
+    "canonical_budget_steps": 800,
+    "reset_policy": "single_episode",
+    "start_state_policy": "uniform_navigable",
+    "privileged_state": false
+  },
+  "horizons": {
+    "planning_steps": [64, 96, 128],
+    "inference_steps": [16, 32],
+    "adaptation_steps": [16, 32, 64]
+  }
+}

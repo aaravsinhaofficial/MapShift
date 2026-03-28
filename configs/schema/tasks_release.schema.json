@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mapshift.local/schemas/tasks_release.schema.json",
+  "title": "MapShift Task Release Config",
+  "type": "object",
+  "required": ["schema_version", "classes", "shared_sampling"],
+  "properties": {
+    "schema_version": { "type": "string", "minLength": 1 },
+    "classes": {
+      "type": "object",
+      "required": ["planning", "inference", "adaptation"],
+      "properties": {
+        "planning": { "$ref": "#/$defs/task_class" },
+        "inference": { "$ref": "#/$defs/task_class" },
+        "adaptation": { "$ref": "#/$defs/task_class" }
+      },
+      "additionalProperties": false
+    },
+    "shared_sampling": {
+      "type": "object",
+      "required": ["hold_fixed", "reject_impossible_tasks", "reject_trivial_tasks"],
+      "properties": {
+        "hold_fixed": { "$ref": "#/$defs/non_empty_string_array" },
+        "reject_impossible_tasks": { "type": "boolean" },
+        "reject_trivial_tasks": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "task_class": {
+      "type": "object",
+      "required": ["enabled", "task_types", "primary_metrics", "canonical_horizon_steps"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "task_types": { "$ref": "#/$defs/non_empty_string_array" },
+        "primary_metrics": { "$ref": "#/$defs/non_empty_string_array" },
+        "canonical_horizon_steps": { "$ref": "#/$defs/positive_int_array" }
+      },
+      "additionalProperties": false
+    },
+    "non_empty_string_array": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    },
+    "positive_int_array": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 1 },
+      "minItems": 1
+    }
+  }
+}

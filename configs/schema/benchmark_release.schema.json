@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mapshift.local/schemas/benchmark_release.schema.json",
+  "title": "MapShift Benchmark Release Config",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "benchmark_name",
+    "benchmark_version",
+    "release_name",
+    "status",
+    "primary_tier",
+    "supported_tiers",
+    "config_refs",
+    "freeze"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "minLength": 1 },
+    "benchmark_name": { "const": "MapShift" },
+    "benchmark_version": { "type": "string", "minLength": 1 },
+    "release_name": { "type": "string", "minLength": 1 },
+    "status": { "type": "string", "minLength": 1 },
+    "primary_tier": { "enum": ["mapshift_2d", "mapshift_3d"] },
+    "supported_tiers": {
+      "type": "array",
+      "items": { "enum": ["mapshift_2d", "mapshift_3d"] },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "config_refs": {
+      "type": "object",
+      "required": ["env2d", "env3d", "interventions", "tasks", "baselines", "analysis"],
+      "properties": {
+        "env2d": { "type": "string", "minLength": 1 },
+        "env3d": { "type": "string", "minLength": 1 },
+        "interventions": { "type": "string", "minLength": 1 },
+        "tasks": { "type": "string", "minLength": 1 },
+        "baselines": { "type": "string", "minLength": 1 },
+        "analysis": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "freeze": {
+      "type": "object",
+      "required": ["scientific_spec", "protocol", "final_evaluation"],
+      "properties": {
+        "scientific_spec": { "$ref": "#/$defs/non_empty_string_array" },
+        "protocol": { "$ref": "#/$defs/non_empty_string_array" },
+        "final_evaluation": { "$ref": "#/$defs/non_empty_string_array" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "non_empty_string_array": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    }
+  }
+}

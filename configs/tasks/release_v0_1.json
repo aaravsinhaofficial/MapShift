@@ -1,0 +1,55 @@
+{
+  "schema_version": "0.1.0",
+  "classes": {
+    "planning": {
+      "enabled": true,
+      "task_types": [
+        "shortest_path_to_target",
+        "reroute_after_blockage",
+        "reach_target_changed_dynamics",
+        "navigate_changed_cue_semantics"
+      ],
+      "primary_metrics": [
+        "success_rate",
+        "normalized_path_efficiency",
+        "counterfactual_planning_accuracy"
+      ],
+      "canonical_horizon_steps": [64, 96, 128]
+    },
+    "inference": {
+      "enabled": true,
+      "task_types": [
+        "detect_topology_change",
+        "predict_masked_region_after_intervention",
+        "counterfactual_reachability_query"
+      ],
+      "primary_metrics": [
+        "accuracy",
+        "change_detection_auroc"
+      ],
+      "canonical_horizon_steps": [16, 32]
+    },
+    "adaptation": {
+      "enabled": true,
+      "task_types": [
+        "limited_post_shift_interaction_then_replan",
+        "few_shot_replanning_after_action_gain_change"
+      ],
+      "primary_metrics": [
+        "adaptation_sample_efficiency",
+        "success_rate"
+      ],
+      "canonical_horizon_steps": [16, 32, 64]
+    }
+  },
+  "shared_sampling": {
+    "hold_fixed": [
+      "start_state_distribution",
+      "goal_distribution",
+      "visibility_distribution",
+      "episode_horizon"
+    ],
+    "reject_impossible_tasks": true,
+    "reject_trivial_tasks": true
+  }
+}

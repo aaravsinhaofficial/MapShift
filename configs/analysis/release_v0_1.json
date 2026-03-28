@@ -1,0 +1,47 @@
+{
+  "schema_version": "0.1.0",
+  "primary_metrics": [
+    "family_success_rate",
+    "family_normalized_path_efficiency",
+    "family_adaptation_sample_efficiency",
+    "family_counterfactual_planning_accuracy"
+  ],
+  "secondary_metrics": [
+    "change_detection_auroc",
+    "masked_state_inference_accuracy",
+    "long_horizon_rollout_consistency"
+  ],
+  "health_metrics": [
+    "ranking_spread",
+    "rank_stability_bootstrap",
+    "metric_correlation_matrix",
+    "severity_response_monotonicity"
+  ],
+  "bootstrap": {
+    "resamples": 1000,
+    "confidence_level": 0.95,
+    "paired_by": "base_environment_id"
+  },
+  "protocol_comparisons": [
+    "same_environment_vs_cep",
+    "no_exploration_vs_reward_free_exploration",
+    "pooled_vs_familywise_reporting",
+    "short_horizon_vs_long_horizon"
+  ],
+  "core_figures": [
+    "cep_pipeline",
+    "intervention_family_examples",
+    "familywise_degradation_curves",
+    "protocol_ranking_comparison",
+    "failure_taxonomy_summary",
+    "external_validity_summary"
+  ],
+  "core_tables": [
+    "benchmark_specification",
+    "baseline_roster_and_fairness",
+    "familywise_main_results",
+    "protocol_sensitivity_and_rank_correlation",
+    "split_and_benchmark_health",
+    "reproducibility_and_compute"
+  ]
+}

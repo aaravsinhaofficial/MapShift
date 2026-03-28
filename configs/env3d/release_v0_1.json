@@ -1,0 +1,32 @@
+{
+  "schema_version": "0.1.0",
+  "tier": "mapshift_3d",
+  "platform": "ProcTHOR",
+  "scene_sampler": "procthor_sampler_v1",
+  "observation": {
+    "mode": "rgbd_egocentric",
+    "field_of_view_deg": 90.0,
+    "frame_size": [224, 224],
+    "semantic_channels": true
+  },
+  "control": {
+    "move_step_m": 0.25,
+    "rotate_step_deg": 15.0
+  },
+  "exploration": {
+    "canonical_budget_steps": 500,
+    "reset_policy": "single_episode",
+    "start_state_policy": "uniform_reachable",
+    "privileged_state": false
+  },
+  "supported_intervention_families": [
+    "metric",
+    "topology",
+    "dynamics",
+    "semantic"
+  ],
+  "documented_deviations": [
+    "metric shifts are represented by control-calibration perturbations rather than literal room rescaling",
+    "semantic shifts are constrained by the object and material vocabulary available in ProcTHOR"
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mapshift.local/schemas/env2d_release.schema.json",
+  "title": "MapShift 2D Release Config",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "tier",
+    "generator_name",
+    "map_size_cells",
+    "occupancy_resolution_m",
+    "pose_mode",
+    "action_space",
+    "observation",
+    "motif_families",
+    "splits",
+    "exploration",
+    "horizons"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "minLength": 1 },
+    "tier": { "const": "mapshift_2d" },
+    "generator_name": { "type": "string", "minLength": 1 },
+    "map_size_cells": {
+      "type": "array",
+      "prefixItems": [
+        { "type": "integer", "minimum": 1 },
+        { "type": "integer", "minimum": 1 }
+      ],
+      "items": false
+    },
+    "occupancy_resolution_m": { "type": "number", "exclusiveMinimum": 0.0 },
+    "pose_mode": { "type": "string", "minLength": 1 },
+    "action_space": {
+      "type": "object",
+      "required": ["name", "forward_step_m", "turn_angle_deg"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "forward_step_m": { "type": "number", "exclusiveMinimum": 0.0 },
+        "turn_angle_deg": { "type": "number", "exclusiveMinimum": 0.0 }
+      },
+      "additionalProperties": false
+    },
+    "observation": {
+      "type": "object",
+      "required": ["mode", "radius_m", "field_of_view_deg", "semantic_channels"],
+      "properties": {
+        "mode": { "type": "string", "minLength": 1 },
+        "radius_m": { "type": "number", "exclusiveMinimum": 0.0 },
+        "field_of_view_deg": { "type": "number", "exclusiveMinimum": 0.0, "maximum": 360.0 },
+        "semantic_channels": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "motif_families": { "$ref": "#/$defs/non_empty_string_array" },
+    "splits": {
+      "type": "object",
+      "required": ["train_motifs", "val_motifs", "test_motifs"],
+      "properties": {
+        "train_motifs": { "$ref": "#/$defs/non_empty_string_array" },
+        "val_motifs": { "$ref": "#/$defs/non_empty_string_array" },
+        "test_motifs": { "$ref": "#/$defs/non_empty_string_array" }
+      },
+      "additionalProperties": false
+    },
+    "exploration": {
+      "type": "object",
+      "required": ["canonical_budget_steps", "reset_policy", "start_state_policy", "privileged_state"],
+      "properties": {
+        "canonical_budget_steps": { "type": "integer", "minimum": 1 },
+        "reset_policy": { "type": "string", "minLength": 1 },
+        "start_state_policy": { "type": "string", "minLength": 1 },
+        "privileged_state": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "horizons": {
+      "type": "object",
+      "required": ["planning_steps", "inference_steps", "adaptation_steps"],
+      "properties": {
+        "planning_steps": { "$ref": "#/$defs/positive_int_array" },
+        "inference_steps": { "$ref": "#/$defs/positive_int_array" },
+        "adaptation_steps": { "$ref": "#/$defs/positive_int_array" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "non_empty_string_array": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    },
+    "positive_int_array": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 1 },
+      "minItems": 1
+    }
+  }
+}

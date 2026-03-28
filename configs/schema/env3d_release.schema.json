@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mapshift.local/schemas/env3d_release.schema.json",
+  "title": "MapShift 3D Release Config",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "tier",
+    "platform",
+    "scene_sampler",
+    "observation",
+    "control",
+    "exploration",
+    "supported_intervention_families",
+    "documented_deviations"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "minLength": 1 },
+    "tier": { "const": "mapshift_3d" },
+    "platform": { "const": "ProcTHOR" },
+    "scene_sampler": { "type": "string", "minLength": 1 },
+    "observation": {
+      "type": "object",
+      "required": ["mode", "field_of_view_deg", "frame_size", "semantic_channels"],
+      "properties": {
+        "mode": { "type": "string", "minLength": 1 },
+        "field_of_view_deg": { "type": "number", "exclusiveMinimum": 0.0, "maximum": 360.0 },
+        "frame_size": {
+          "type": "array",
+          "prefixItems": [
+            { "type": "integer", "minimum": 1 },
+            { "type": "integer", "minimum": 1 }
+          ],
+          "items": false
+        },
+        "semantic_channels": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "control": {
+      "type": "object",
+      "required": ["move_step_m", "rotate_step_deg"],
+      "properties": {
+        "move_step_m": { "type": "number", "exclusiveMinimum": 0.0 },
+        "rotate_step_deg": { "type": "number", "exclusiveMinimum": 0.0 }
+      },
+      "additionalProperties": false
+    },
+    "exploration": {
+      "type": "object",
+      "required": ["canonical_budget_steps", "reset_policy", "start_state_policy", "privileged_state"],
+      "properties": {
+        "canonical_budget_steps": { "type": "integer", "minimum": 1 },
+        "reset_policy": { "type": "string", "minLength": 1 },
+        "start_state_policy": { "type": "string", "minLength": 1 },
+        "privileged_state": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "supported_intervention_families": {
+      "type": "array",
+      "items": { "enum": ["metric", "topology", "dynamics", "semantic"] },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "documented_deviations": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "additionalProperties": false
+}

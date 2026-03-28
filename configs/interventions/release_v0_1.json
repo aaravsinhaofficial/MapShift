@@ -1,0 +1,99 @@
+{
+  "schema_version": "0.1.0",
+  "canonical_family_order": [
+    "metric",
+    "topology",
+    "dynamics",
+    "semantic"
+  ],
+  "families": {
+    "metric": {
+      "severity_parameter": "action_gain_scale",
+      "severity_levels": {
+        "0": { "value": 1.0, "interventions": ["none"] },
+        "1": { "value": 1.1, "interventions": ["action_gain_perturbation", "mild_odometry_bias"] },
+        "2": { "value": 1.25, "interventions": ["action_gain_perturbation", "odometry_bias"] },
+        "3": { "value": 1.5, "interventions": ["action_gain_perturbation", "strong_odometry_bias"] }
+      },
+      "preserve": [
+        "topology_labels",
+        "semantic_identities"
+      ],
+      "expected_failures": [
+        "local_geometry_failure",
+        "metric_calibration_failure"
+      ],
+      "validator_invariants": [
+        "topology_preserved",
+        "semantic_identity_preserved",
+        "severity_monotone"
+      ]
+    },
+    "topology": {
+      "severity_parameter": "blocker_fraction",
+      "severity_levels": {
+        "0": { "value": 0.0, "interventions": ["none"] },
+        "1": { "value": 0.08, "interventions": ["doorway_blocked"] },
+        "2": { "value": 0.18, "interventions": ["wall_inserted", "doorway_blocked"] },
+        "3": { "value": 0.32, "interventions": ["corridor_removed", "wall_inserted"] }
+      },
+      "preserve": [
+        "semantic_identities",
+        "action_response_parameters"
+      ],
+      "expected_failures": [
+        "connectivity_update_failure",
+        "rerouting_failure"
+      ],
+      "validator_invariants": [
+        "landmark_identity_preserved",
+        "geometry_change_is_intended",
+        "severity_monotone"
+      ]
+    },
+    "dynamics": {
+      "severity_parameter": "friction_multiplier",
+      "severity_levels": {
+        "0": { "value": 1.0, "interventions": ["none"] },
+        "1": { "value": 0.9, "interventions": ["friction_change"] },
+        "2": { "value": 0.75, "interventions": ["friction_change", "inertial_lag"] },
+        "3": { "value": 0.6, "interventions": ["friction_change", "inertial_lag", "action_asymmetry"] }
+      },
+      "preserve": [
+        "geometry",
+        "semantic_identities"
+      ],
+      "expected_failures": [
+        "dynamics_calibration_failure",
+        "transition_model_failure"
+      ],
+      "validator_invariants": [
+        "geometry_preserved",
+        "semantic_identity_preserved",
+        "severity_monotone"
+      ]
+    },
+    "semantic": {
+      "severity_parameter": "remap_fraction",
+      "severity_levels": {
+        "0": { "value": 0.0, "interventions": ["none"] },
+        "1": { "value": 0.1, "interventions": ["landmark_identity_swap"] },
+        "2": { "value": 0.25, "interventions": ["goal_cue_remapping", "landmark_identity_swap"] },
+        "3": { "value": 0.5, "interventions": ["reward_semantic_reassignment", "goal_cue_remapping"] }
+      },
+      "preserve": [
+        "navigable_geometry",
+        "action_response_parameters"
+      ],
+      "expected_failures": [
+        "semantic_remapping_failure",
+        "surface_cue_overreliance"
+      ],
+      "validator_invariants": [
+        "geometry_preserved",
+        "reachability_preserved",
+        "severity_monotone"
+      ]
+    }
+  }
+}
