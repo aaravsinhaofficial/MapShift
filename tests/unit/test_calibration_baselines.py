@@ -12,6 +12,7 @@ from mapshift.envs.map2d.state import AgentPose2D, Map2DEnvironment, Map2DNode
 from mapshift.interventions import build_intervention
 from mapshift.runners.evaluate import run_calibration_suite, run_evaluation
 from mapshift.runners.explore import run_exploration
+from mapshift.tasks.inference import InferenceTask
 from mapshift.tasks.planning import PlanningTask
 
 
@@ -20,6 +21,8 @@ ROOT_CONFIG = REPO_ROOT / "configs" / "benchmark" / "release_v0_1.json"
 ORACLE_CONFIG = REPO_ROOT / "configs" / "calibration" / "oracle_post_intervention_planner_v0_1.json"
 HEURISTIC_CONFIG = REPO_ROOT / "configs" / "calibration" / "weak_heuristic_baseline_v0_1.json"
 RECURRENT_CONFIG = REPO_ROOT / "configs" / "calibration" / "monolithic_recurrent_world_model_v0_1.json"
+MEMORY_CONFIG = REPO_ROOT / "configs" / "calibration" / "persistent_memory_world_model_v0_1.json"
+RELATIONAL_CONFIG = REPO_ROOT / "configs" / "calibration" / "relational_graph_world_model_v0_1.json"
 
 
 def corridor_environment() -> Map2DEnvironment:
@@ -189,6 +192,48 @@ class CalibrationBaselineTests(unittest.TestCase):
         self.assertEqual(model.parameter_count, model.trainable_parameter_count)
         self.assertEqual(model.describe()["parameters"]["hidden_size"], 12)
 
+    def test_memory_wrapper_is_config_driven_and_tracks_parameters(self) -> None:
+        config = load_baseline_run_config(MEMORY_CONFIG)
+        model = instantiate_baseline(config)
+
+        self.assertEqual(model.name, "persistent_memory_world_model")
+        self.assertGreater(model.parameter_count, 0)
+        self.assertEqual(model.parameter_count, model.trainable_parameter_count)
+        self.assertEqual(model.describe()["parameters"]["memory_slots"], 16)
+
+    def test_relational_wrapper_is_config_driven_and_tracks_parameters(self) -> None:
+        config = load_baseline_run_config(RELATIONAL_CONFIG)
+        model = instantiate_baseline(config)
+
+        self.assertEqual(model.name, "relational_graph_world_model")
+        self.assertGreater(model.parameter_count, 0)
+        self.assertEqual(model.parameter_count, model.trainable_parameter_count)
+        self.assertEqual(model.describe()["parameters"]["message_passing_steps"], 2)
+
+    def test_relational_baseline_detects_topology_change(self) -> None:
+        bundle = load_release_bundle(ROOT_CONFIG)
+        generator = Map2DGenerator(bundle.env2d)
+        base_environment = generator.generate(seed=17, motif_tag="branching_chain").environment
+        intervention = build_intervention("topology", bundle.interventions.families["topology"])
+        transformed_environment = intervention.apply(base_environment, severity=2, seed=99).environment
+
+        config = load_baseline_run_config(RELATIONAL_CONFIG)
+        model = instantiate_baseline(config)
+        context = BaselineContext(model_name=model.name, exploration_budget_steps=config.exploration_budget_steps, seed=config.seed)
+        exploration = run_exploration(model, base_environment, context)
+        task = InferenceTask(
+            task_type="detect_topology_change",
+            family="topology",
+            query="Did the connectivity structure change between the explored and intervened environment?",
+            expected_output_type="boolean",
+            expected_answer=True,
+        )
+
+        result = run_evaluation(model, transformed_environment, task, exploration, context)
+
+        self.assertTrue(result.correct)
+        self.assertTrue(result.metadata["structural_shift_detected"])
+
     def test_oracle_detects_impossible_tasks(self) -> None:
         environment = unreachable_environment()
         config = load_baseline_run_config(ORACLE_CONFIG)
@@ -211,11 +256,11 @@ class CalibrationBaselineTests(unittest.TestCase):
         self.assertFalse(result.solvable)
         self.assertTrue(result.metadata["impossible_for_oracle"])
 
-    def test_calibration_suite_runs_end_to_end_for_three_baselines(self) -> None:
+    def test_calibration_suite_runs_end_to_end_for_five_baselines(self) -> None:
         bundle = load_release_bundle(ROOT_CONFIG)
         report = run_calibration_suite(
             release_bundle=bundle,
-            baseline_run_configs=[ORACLE_CONFIG, HEURISTIC_CONFIG, RECURRENT_CONFIG],
+            baseline_run_configs=[ORACLE_CONFIG, HEURISTIC_CONFIG, RECURRENT_CONFIG, MEMORY_CONFIG, RELATIONAL_CONFIG],
             sample_count_per_motif=1,
             task_samples_per_class=1,
             severity_levels=(0, 1),
@@ -225,10 +270,14 @@ class CalibrationBaselineTests(unittest.TestCase):
         self.assertIn("oracle_post_intervention_planner", baseline_names)
         self.assertIn("weak_heuristic_baseline", baseline_names)
         self.assertIn("monolithic_recurrent_world_model", baseline_names)
+        self.assertIn("persistent_memory_world_model", baseline_names)
+        self.assertIn("relational_graph_world_model", baseline_names)
         self.assertTrue(report.familywise_summary["rows"])
         self.assertIn("oracle_post_intervention_planner", report.baseline_metadata)
         self.assertIn("weak_heuristic_baseline", report.baseline_metadata)
         self.assertIn("monolithic_recurrent_world_model", report.baseline_metadata)
+        self.assertIn("persistent_memory_world_model", report.baseline_metadata)
+        self.assertIn("relational_graph_world_model", report.baseline_metadata)
 
 
 if __name__ == "__main__":

@@ -149,7 +149,7 @@ def register_baseline(name: str, factory: Callable[[BaselineRunConfig], BaseBase
 def _ensure_builtin_registrations() -> None:
     """Import built-in calibration baselines so they self-register."""
 
-    from . import heuristic, oracle, recurrent  # noqa: F401
+    from . import heuristic, memory, oracle, recurrent, relational  # noqa: F401
 
 
 def instantiate_baseline(run_config: BaselineRunConfig) -> BaseBaselineModel:

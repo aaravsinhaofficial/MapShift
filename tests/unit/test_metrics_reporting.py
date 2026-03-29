@@ -17,6 +17,8 @@ ROOT_CONFIG = REPO_ROOT / "configs" / "benchmark" / "release_v0_1.json"
 ORACLE_CONFIG = REPO_ROOT / "configs" / "calibration" / "oracle_post_intervention_planner_v0_1.json"
 HEURISTIC_CONFIG = REPO_ROOT / "configs" / "calibration" / "weak_heuristic_baseline_v0_1.json"
 RECURRENT_CONFIG = REPO_ROOT / "configs" / "calibration" / "monolithic_recurrent_world_model_v0_1.json"
+MEMORY_CONFIG = REPO_ROOT / "configs" / "calibration" / "persistent_memory_world_model_v0_1.json"
+RELATIONAL_CONFIG = REPO_ROOT / "configs" / "calibration" / "relational_graph_world_model_v0_1.json"
 
 
 class MetricsReportingTests(unittest.TestCase):
@@ -56,7 +58,7 @@ class MetricsReportingTests(unittest.TestCase):
         bundle = load_release_bundle(ROOT_CONFIG)
         report = run_calibration_suite(
             release_bundle=bundle,
-            baseline_run_configs=[ORACLE_CONFIG, HEURISTIC_CONFIG, RECURRENT_CONFIG],
+            baseline_run_configs=[ORACLE_CONFIG, HEURISTIC_CONFIG, RECURRENT_CONFIG, MEMORY_CONFIG, RELATIONAL_CONFIG],
             sample_count_per_motif=1,
             task_samples_per_class=1,
             severity_levels=(0,),
@@ -75,7 +77,7 @@ class MetricsReportingTests(unittest.TestCase):
         bundle = load_release_bundle(ROOT_CONFIG)
         report = run_protocol_comparison_suite(
             release_bundle=bundle,
-            baseline_run_configs=[ORACLE_CONFIG, HEURISTIC_CONFIG, RECURRENT_CONFIG],
+            baseline_run_configs=[ORACLE_CONFIG, HEURISTIC_CONFIG, RECURRENT_CONFIG, MEMORY_CONFIG, RELATIONAL_CONFIG],
             sample_count_per_motif=1,
             task_samples_per_class=1,
             severity_levels=(0,),

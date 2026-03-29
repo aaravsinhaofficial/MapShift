@@ -64,6 +64,11 @@ class MapShift2DStudyIntegrationTests(unittest.TestCase):
         )
         self.assertIn("pairwise_comparisons", protocol_table)
         self.assertIn("same_environment_vs_cep", protocol_table["pairwise_comparisons"])
+        familywise_rows = self.study_bundle.report_artifacts["tables"]["familywise_main_results"]
+        self.assertIn(
+            "relational_graph_world_model",
+            {str(row["baseline_name"]) for row in familywise_rows},
+        )
 
     def test_study_bundle_can_be_regenerated_from_raw_reports(self) -> None:
         rebuilt = build_mapshift_2d_study_bundle(

@@ -36,6 +36,8 @@ def main() -> int:
         "configs/calibration/oracle_post_intervention_planner_v0_1.json",
         "configs/calibration/weak_heuristic_baseline_v0_1.json",
         "configs/calibration/monolithic_recurrent_world_model_v0_1.json",
+        "configs/calibration/persistent_memory_world_model_v0_1.json",
+        "configs/calibration/relational_graph_world_model_v0_1.json",
     ]
     report = run_calibration_suite(
         release_bundle=release_bundle,

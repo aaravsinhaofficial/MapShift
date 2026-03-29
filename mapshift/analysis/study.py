@@ -300,36 +300,58 @@ def _family_signature_separability(family_signatures: dict[str, Sequence[float]]
 def _build_discriminative_power_outputs(cep_report_payload: dict[str, Any]) -> dict[str, Any]:
     family_rows = cep_report_payload["familywise_summary"]["rows"]
     ranking_summary = cep_report_payload["ranking_summary"]
-    oracle_rows = [row for row in family_rows if row["baseline_name"] == "oracle_post_intervention_planner"]
-    heuristic_rows = [row for row in family_rows if row["baseline_name"] == "weak_heuristic_baseline"]
-    recurrent_rows = [row for row in family_rows if row["baseline_name"] == "monolithic_recurrent_world_model"]
     family_gaps = []
-    for family in sorted({str(row["family"]) for row in family_rows}):
-        oracle = next((row for row in oracle_rows if row["family"] == family), None)
-        heuristic = next((row for row in heuristic_rows if row["family"] == family), None)
-        recurrent = next((row for row in recurrent_rows if row["family"] == family), None)
+    oracle_reference_gaps = []
+    pairwise_family_gaps = []
+    families = sorted({str(row["family"]) for row in family_rows})
+    for family in families:
+        family_score_rows = [row for row in family_rows if row["family"] == family]
+        score_by_baseline = {
+            str(row["baseline_name"]): float(row["family_primary_score"])
+            for row in family_score_rows
+        }
+        oracle = score_by_baseline.get("oracle_post_intervention_planner")
+        heuristic = score_by_baseline.get("weak_heuristic_baseline")
+        recurrent = score_by_baseline.get("monolithic_recurrent_world_model")
         family_gaps.append(
             {
                 "family": family,
-                "oracle_minus_heuristic": _safe_gap(oracle, heuristic),
-                "oracle_minus_recurrent": _safe_gap(oracle, recurrent),
-                "recurrent_minus_heuristic": _safe_gap(recurrent, heuristic),
+                "oracle_minus_heuristic": None if oracle is None or heuristic is None else oracle - heuristic,
+                "oracle_minus_recurrent": None if oracle is None or recurrent is None else oracle - recurrent,
+                "recurrent_minus_heuristic": None if recurrent is None or heuristic is None else recurrent - heuristic,
             }
         )
+        if oracle is not None:
+            for baseline_name, score in sorted(score_by_baseline.items()):
+                if baseline_name == "oracle_post_intervention_planner":
+                    continue
+                oracle_reference_gaps.append(
+                    {
+                        "family": family,
+                        "baseline_name": baseline_name,
+                        "oracle_minus_baseline": oracle - score,
+                    }
+                )
+        baseline_names = sorted(score_by_baseline)
+        for left_index, left_name in enumerate(baseline_names):
+            for right_name in baseline_names[left_index + 1 :]:
+                pairwise_family_gaps.append(
+                    {
+                        "family": family,
+                        "left_baseline": left_name,
+                        "right_baseline": right_name,
+                        "left_minus_right": score_by_baseline[left_name] - score_by_baseline[right_name],
+                    }
+                )
     return {
         "familywise_rankings": ranking_summary["family_orders"],
         "familywise_gaps": family_gaps,
+        "oracle_reference_gaps": oracle_reference_gaps,
+        "pairwise_family_gaps": pairwise_family_gaps,
         "ranking_spread": ranking_summary["family_spreads"],
         "rank_stability": ranking_summary["rank_stability"],
         "saturation_checks": cep_report_payload["saturation_summary"],
     }
-
-
-def _safe_gap(left_row: dict[str, Any] | None, right_row: dict[str, Any] | None) -> float | None:
-    if left_row is None or right_row is None:
-        return None
-    return float(left_row["family_primary_score"]) - float(right_row["family_primary_score"])
-
 
 def _build_protocol_sensitivity_outputs(protocol_report_payload: dict[str, Any]) -> dict[str, Any]:
     pairwise = dict(protocol_report_payload["pairwise_comparisons"])
