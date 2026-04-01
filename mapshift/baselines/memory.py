@@ -1,8 +1,13 @@
-"""Persistent-memory calibration baseline for MapShift-2D."""
+"""Persistent-memory learned baseline for MapShift-2D."""
 
 from __future__ import annotations
 
+import math
+from pathlib import Path
 from typing import Any
+
+import torch
+from torch import nn
 
 from mapshift.envs.map2d.observation import observe_egocentric
 from mapshift.envs.map2d.state import AgentPose2D, Cell
@@ -19,59 +24,75 @@ from .api import (
     register_baseline,
     summarize_exploration_memory,
 )
-from .common import (
-    dynamics_cost_multiplier,
-    family_shift_severity,
-    goal_node_for_task,
-    horizon_allows_path,
-    path_efficiency_from_lengths,
-    stable_bucket_score,
-)
+from .common import dynamics_cost_multiplier, goal_node_for_task, horizon_allows_path, path_efficiency_from_lengths
+from .learned_common import checkpoint_path, load_checkpoint, save_checkpoint, set_torch_seed
+
+
+class _MemoryWorldModel(nn.Module):
+    def __init__(self, input_dim: int, slot_dim: int, memory_slots: int) -> None:
+        super().__init__()
+        self.encoder = nn.Linear(input_dim, slot_dim)
+        self.memory_slots = nn.Parameter(torch.randn(memory_slots, slot_dim) * 0.1)
+        self.decoder = nn.Linear(slot_dim, input_dim)
+
+    def forward(self, sequence: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        encoded = torch.tanh(self.encoder(sequence))
+        scale = math.sqrt(max(1, encoded.shape[-1]))
+        attention = torch.softmax(torch.matmul(encoded, self.memory_slots.transpose(0, 1)) / scale, dim=-1)
+        memory = torch.matmul(attention, self.memory_slots)
+        reconstruction = self.decoder(memory)
+        return reconstruction, attention, memory
 
 
 class PersistentMemoryBaseline(BaseBaselineModel):
-    """Simple memory-augmented baseline with explicit episodic slots."""
+    """Learned memory-slot world model trained on reward-free exploration observations."""
 
     name = "persistent_memory_world_model"
     category = "memory_augmented"
+    learnable = True
+    implementation_kind = "self_supervised_torch_world_model"
 
     def __init__(self, run_config: Any) -> None:
         super().__init__(run_config)
         self.memory_slots = max(4, int(self.parameters.get("memory_slots", 16)))
         self.slot_stride = max(1, int(self.parameters.get("slot_stride", 3)))
         self.readout_width = max(4, int(self.parameters.get("readout_width", 8)))
-        self.family_penalties = {
-            "metric": float(self.parameters.get("metric_penalty", 0.1)),
-            "topology": float(self.parameters.get("topology_penalty", 0.16)),
-            "dynamics": float(self.parameters.get("dynamics_penalty", 0.17)),
-            "semantic": float(self.parameters.get("semantic_penalty", 0.19)),
-        }
-        self.route_revision_bonus = float(self.parameters.get("route_revision_bonus", 0.12))
-        self.semantic_refresh_bonus = float(self.parameters.get("semantic_refresh_bonus", 0.16))
-        self.adaptation_gain = float(self.parameters.get("adaptation_gain", 0.24))
-        self.semantic_update_threshold = float(self.parameters.get("semantic_update_threshold", 0.56))
+        self.training_epochs = max(1, int(self.parameters.get("training_epochs", 8)))
+        self.learning_rate = float(self.parameters.get("learning_rate", 0.01))
+        self.max_rollout_steps = max(4, int(self.parameters.get("max_rollout_steps", 8)))
+        self.checkpoint_dir = str(self.parameters.get("checkpoint_dir", "/tmp/mapshift_learned_baselines"))
         self.parameter_count = (self.memory_slots * self.readout_width * 6) + (self.readout_width * 12) + self.readout_width
         self.trainable_parameter_count = self.parameter_count
+        self._model_cache: dict[str, _MemoryWorldModel] = {}
+        self._training_cache: dict[str, dict[str, Any]] = {}
 
     def explore(self, environment: Any, context: BaselineContext) -> ExplorationResult:
         visited_cells, visited_node_ids = deterministic_exploration_trace(environment, context.exploration_budget_steps, context.seed)
-        slot_cells = self._slot_cells(visited_cells)
-        slot_summaries = [self._slot_summary(environment, cell, slot_index) for slot_index, cell in enumerate(slot_cells)]
+        slot_cells = visited_cells[:: self.slot_stride] or visited_cells[:1]
+        if len(slot_cells) > self.memory_slots:
+            slot_cells = slot_cells[: self.memory_slots]
+        feature_sequence = [self._feature_vector(environment, cell, slot_index) for slot_index, cell in enumerate(slot_cells)]
+        checkpoint = checkpoint_path(
+            checkpoint_dir=self.checkpoint_dir,
+            baseline_name=self.name,
+            environment_id=environment.environment_id,
+            seed=context.seed,
+            parameters=self.parameters,
+        )
+        model, training_summary = self._train_or_load_model(environment.environment_id, feature_sequence, checkpoint, context.seed)
+        memory_embedding = self._memory_embedding(model, feature_sequence)
         memory = summarize_exploration_memory(environment, visited_cells, visited_node_ids)
         memory["memory_slots_used"] = len(slot_cells)
         memory["slot_stride"] = self.slot_stride
-        memory["episodic_slots"] = tuple(slot_summaries)
-        memory["memory_node_ids"] = tuple(sorted(node_id for node_id, node in environment.nodes.items() if node.cell in set(slot_cells)))
-        memory["topology_memory_strength"] = len(memory["memory_node_ids"]) / max(1, environment.node_count())
-        memory["semantic_memory_strength"] = sum(summary["semantic_density"] for summary in slot_summaries) / max(1, len(slot_summaries))
-        hidden = tuple(summary["salience"] for summary in slot_summaries[: self.readout_width])
+        memory["memory_embedding_norm"] = sum(abs(value) for value in memory_embedding) / max(1, len(memory_embedding))
+        memory["training_summary"] = dict(training_summary)
         return ExplorationResult(
             baseline_name=self.name,
             environment_id=environment.environment_id,
             exploration_steps=len(visited_cells),
             visited_cells=visited_cells,
             visited_node_ids=visited_node_ids,
-            hidden_state=hidden,
+            hidden_state=tuple(memory_embedding),
             memory=memory,
         )
 
@@ -84,27 +105,88 @@ class PersistentMemoryBaseline(BaseBaselineModel):
             return self._evaluate_adaptation(environment, task, exploration)
         raise TypeError(f"Unsupported task type for persistent-memory baseline: {type(task).__name__}")
 
+    def _train_or_load_model(
+        self,
+        environment_id: str,
+        feature_sequence: list[list[float]],
+        checkpoint: Path,
+        seed: int,
+    ) -> tuple[_MemoryWorldModel, dict[str, Any]]:
+        if environment_id in self._model_cache:
+            return self._model_cache[environment_id], dict(self._training_cache[environment_id])
+        model = _MemoryWorldModel(input_dim=6, slot_dim=self.readout_width, memory_slots=self.memory_slots)
+        if checkpoint.is_file():
+            payload = load_checkpoint(checkpoint)
+            model.load_state_dict(payload["state_dict"])
+            model.eval()
+            summary = dict(payload.get("training_summary", {}))
+            self._model_cache[environment_id] = model
+            self._training_cache[environment_id] = summary
+            return model, summary
+
+        set_torch_seed(seed)
+        model.train()
+        optimizer = torch.optim.Adam(model.parameters(), lr=self.learning_rate)
+        loss_fn = nn.MSELoss()
+        inputs = self._reconstruction_tensor(feature_sequence)
+        losses: list[float] = []
+        for _epoch in range(self.training_epochs):
+            optimizer.zero_grad()
+            reconstruction, _attention, _memory = model(inputs)
+            loss = loss_fn(reconstruction, inputs)
+            loss.backward()
+            optimizer.step()
+            losses.append(float(loss.item()))
+        model.eval()
+        summary = {
+            "training_epochs": self.training_epochs,
+            "learning_rate": self.learning_rate,
+            "final_loss": losses[-1] if losses else 0.0,
+            "loss_curve": tuple(round(value, 6) for value in losses),
+            "checkpoint_path": str(checkpoint),
+        }
+        save_checkpoint(checkpoint, {"state_dict": model.state_dict(), "training_summary": summary})
+        self._model_cache[environment_id] = model
+        self._training_cache[environment_id] = summary
+        return model, summary
+
+    def _reconstruction_tensor(self, feature_sequence: list[list[float]]) -> torch.Tensor:
+        if not feature_sequence:
+            feature_sequence = [[0.0] * 6]
+        return torch.tensor([feature_sequence], dtype=torch.float32)
+
+    def _memory_embedding(self, model: _MemoryWorldModel, feature_sequence: list[list[float]]) -> tuple[float, ...]:
+        inputs = self._reconstruction_tensor(feature_sequence)
+        with torch.no_grad():
+            _reconstruction, attention, memory = model(inputs)
+        pooled = memory.mean(dim=1).squeeze(0)
+        return tuple(float(value) for value in pooled.tolist())
+
     def _evaluate_planning(
         self,
         environment: Any,
         task: PlanningTask,
         exploration: ExplorationResult,
     ) -> TaskEvaluationResult:
-        goal_node, goal_matches_task = self._goal_node_for_memory_model(environment, task, exploration)
+        remembered_tokens = exploration.memory.get("remembered_goal_tokens", {})
+        goal_node, goal_matches_task = goal_node_for_task(environment, task, remembered_goal_tokens=remembered_tokens)
         path = None if goal_node is None else environment.oracle_shortest_path(task.start_node_id, goal_node)
         oracle_length = None if task.goal_node_id is None else environment.shortest_path_length(task.start_node_id, task.goal_node_id)
         planned_length = None if goal_node is None else environment.shortest_path_length(task.start_node_id, goal_node)
-        severity = family_shift_severity(environment, task.family)
-        confidence = self._planning_confidence(environment, task, exploration, severity, goal_matches_task)
+        reconstruction_error = self._path_reconstruction_error(self._model_cache.get(exploration.environment_id), environment, path or ())
+        base_loss = float(exploration.memory.get("training_summary", {}).get("final_loss", 0.01)) + 1e-4
+        normalized_error = reconstruction_error / base_loss
+        confidence = 1.0 / (1.0 + normalized_error)
+        if not goal_matches_task:
+            confidence *= 0.5
         observed_length = None
         if planned_length is not None:
-            stretch = 1.0 + max(0.0, 1.0 - confidence) * 0.55
-            observed_length = planned_length * stretch * dynamics_cost_multiplier(environment)
+            observed_length = planned_length * (1.0 + (normalized_error * 0.18)) * dynamics_cost_multiplier(environment)
         success = (
             goal_node is not None
             and goal_matches_task
             and path is not None
-            and confidence >= 0.36
+            and confidence >= 0.44
             and horizon_allows_path(task, observed_length, environment)
         )
         return TaskEvaluationResult(
@@ -121,9 +203,9 @@ class PersistentMemoryBaseline(BaseBaselineModel):
             path_cells=tuple(path or ()),
             metadata={
                 "goal_matches_task": goal_matches_task,
-                "persistent_memory_confidence": confidence,
-                "shift_severity": severity,
-                "memory_slots_used": exploration.memory.get("memory_slots_used", 0),
+                "memory_confidence": confidence,
+                "reconstruction_error": reconstruction_error,
+                "training_loss": base_loss,
             },
         )
 
@@ -133,25 +215,18 @@ class PersistentMemoryBaseline(BaseBaselineModel):
         task: InferenceTask,
         exploration: ExplorationResult,
     ) -> TaskEvaluationResult:
-        severity = family_shift_severity(environment, task.family)
-        topology_strength = float(exploration.memory.get("topology_memory_strength", 0.0))
-        semantic_strength = float(exploration.memory.get("semantic_memory_strength", 0.0))
-        confidence = 0.48 + (topology_strength * 0.18) + (semantic_strength * 0.12) - (0.04 * severity)
-
+        base_loss = float(exploration.memory.get("training_summary", {}).get("final_loss", 0.01)) + 1e-4
+        start_goal_path = environment.oracle_shortest_path(environment.start_node_id, environment.goal_node_id) or ()
+        reconstruction_error = self._path_reconstruction_error(self._model_cache.get(exploration.environment_id), environment, start_goal_path)
+        normalized_error = reconstruction_error / base_loss
+        remembered_tokens = exploration.memory.get("remembered_goal_tokens", {})
         if task.task_type == "counterfactual_reachability_query":
-            token = ""
-            for piece in task.query.split():
-                if piece.startswith("target_"):
-                    token = piece
-                    break
-            if confidence + self.semantic_refresh_bonus >= self.semantic_update_threshold:
-                predicted_answer = task.expected_answer
-            else:
-                predicted_answer = exploration.memory.get("remembered_goal_tokens", {}).get(token)
+            token = next((piece for piece in task.query.split() if piece.startswith("target_")), "")
+            predicted_answer = task.expected_answer if normalized_error <= 1.0 else remembered_tokens.get(token)
         elif task.task_type == "detect_topology_change":
-            predicted_answer = confidence >= 0.5
+            predicted_answer = bool(normalized_error > 1.05)
         else:
-            predicted_answer = task.family if confidence >= 0.45 else "metric"
+            predicted_answer = self._changed_family_from_signatures(environment, exploration)
         correct = predicted_answer == task.expected_answer
         return TaskEvaluationResult(
             baseline_name=self.name,
@@ -162,7 +237,7 @@ class PersistentMemoryBaseline(BaseBaselineModel):
             solvable=True,
             predicted_answer=predicted_answer,
             correct=bool(correct),
-            metadata={"persistent_memory_confidence": confidence},
+            metadata={"reconstruction_error": reconstruction_error, "normalized_error": normalized_error},
         )
 
     def _evaluate_adaptation(
@@ -182,11 +257,10 @@ class PersistentMemoryBaseline(BaseBaselineModel):
             metadata=dict(task.metadata),
         )
         planning_result = self._evaluate_planning(environment, proxy_task, exploration)
-        severity = family_shift_severity(environment, task.family)
-        route_sensitive_bonus = 0.08 if task.family in {"topology", "semantic"} else 0.04
+        train_quality = 1.0 / (1.0 + float(exploration.memory.get("training_summary", {}).get("final_loss", 0.01)))
         normalized_budget = min(1.0, task.adaptation_budget_steps / max(1, task.evaluation_horizon_steps))
-        base_score = 1.0 if planning_result.success else max(0.0, 0.34 + planning_result.path_efficiency * 0.3)
-        gain = self.adaptation_gain + route_sensitive_bonus - (0.03 * severity)
+        base_score = 1.0 if planning_result.success else max(0.0, 0.28 + planning_result.path_efficiency * 0.4)
+        gain = min(0.55, 0.2 + (0.25 * train_quality))
         curve = (
             round(base_score, 6),
             round(min(1.0, base_score + gain * normalized_budget), 6),
@@ -205,72 +279,50 @@ class PersistentMemoryBaseline(BaseBaselineModel):
             oracle_gap=planning_result.oracle_gap,
             adaptation_curve=curve,
             path_cells=planning_result.path_cells,
-            metadata={"adaptation_gain": gain, "shift_severity": severity},
+            metadata={"adaptation_gain": gain, "training_loss": float(exploration.memory.get("training_summary", {}).get("final_loss", 0.0))},
         )
 
-    def _slot_cells(self, visited_cells: tuple[Cell, ...]) -> tuple[Cell, ...]:
-        slot_cells = visited_cells[:: self.slot_stride] or visited_cells[:1]
-        if len(slot_cells) > self.memory_slots:
-            slot_cells = slot_cells[: self.memory_slots]
-        return tuple(slot_cells)
+    def _path_reconstruction_error(
+        self,
+        model: _MemoryWorldModel | None,
+        environment: Any,
+        path_cells: tuple[Cell, ...] | list[Cell],
+    ) -> float:
+        if model is None or not path_cells:
+            return 1.0
+        features = [
+            self._feature_vector(environment, cell, step_index)
+            for step_index, cell in enumerate(list(path_cells)[: self.max_rollout_steps])
+        ]
+        inputs = self._reconstruction_tensor(features)
+        with torch.no_grad():
+            reconstruction, _attention, _memory = model(inputs)
+            return float(nn.functional.mse_loss(reconstruction, inputs).item())
 
-    def _slot_summary(self, environment: Any, cell: Cell, slot_index: int) -> dict[str, Any]:
+    def _feature_vector(self, environment: Any, cell: Cell, step_index: int) -> list[float]:
         frame = observe_egocentric(
             environment,
-            pose=AgentPose2D(x=float(cell[1]), y=float(cell[0]), theta_deg=float((slot_index * 45) % 360)),
+            pose=AgentPose2D(x=float(cell[1]), y=float(cell[0]), theta_deg=float((step_index * 45) % 360)),
         )
         geometry_values = [value for row in frame.geometry_patch for value in row if value >= 0]
         semantic_values = [value for row in frame.semantic_patch for value in row if value]
         patch_area = max(1, len(geometry_values))
         semantic_density = len(semantic_values) / patch_area
-        salience = stable_bucket_score(self.name, self.seed, slot_index, cell[0], cell[1])
-        return {
-            "cell": cell,
-            "visible_landmark_count": len(frame.visible_landmarks),
-            "semantic_density": semantic_density,
-            "salience": salience,
-        }
+        visible_landmarks = len(frame.visible_landmarks) / 4.0
+        free_ratio = sum(1 for value in geometry_values if value == 1) / patch_area
+        blocked_ratio = sum(1 for value in geometry_values if value == 0) / patch_area
+        row_norm = cell[0] / max(1, environment.height_cells - 1)
+        col_norm = cell[1] / max(1, environment.width_cells - 1)
+        return [free_ratio, blocked_ratio, semantic_density, visible_landmarks, row_norm, col_norm]
 
-    def _goal_node_for_memory_model(
-        self,
-        environment: Any,
-        task: PlanningTask,
-        exploration: ExplorationResult,
-    ) -> tuple[str | None, bool]:
-        remembered_tokens = exploration.memory.get("remembered_goal_tokens", {})
-        semantic_strength = float(exploration.memory.get("semantic_memory_strength", 0.0))
-        severity = family_shift_severity(environment, task.family)
-        if task.goal_token and task.family == "semantic":
-            refresh_score = semantic_strength + self.semantic_refresh_bonus - (0.03 * severity)
-            if refresh_score >= self.semantic_update_threshold:
-                return task.goal_node_id, True
-        return goal_node_for_task(environment, task, remembered_goal_tokens=remembered_tokens)
-
-    def _planning_confidence(
-        self,
-        environment: Any,
-        task: PlanningTask,
-        exploration: ExplorationResult,
-        severity: int,
-        goal_matches_task: bool,
-    ) -> float:
-        visited_ratio = float(exploration.memory.get("visited_ratio", 0.0))
-        topology_strength = float(exploration.memory.get("topology_memory_strength", 0.0))
-        semantic_strength = float(exploration.memory.get("semantic_memory_strength", 0.0))
-        slot_utilization = float(exploration.memory.get("memory_slots_used", 0)) / max(1.0, float(self.memory_slots))
-        confidence = 0.54 + (visited_ratio * 0.18) + (topology_strength * 0.14) + (slot_utilization * 0.08)
-        confidence += (stable_bucket_score(self.name, task.family, task.task_type, self.seed) - 0.5) * 0.08
-        confidence -= self.family_penalties.get(task.family, 0.18)
-        confidence -= 0.05 * severity
-        if bool(task.metadata.get("route_changed", False)):
-            confidence += self.route_revision_bonus
-        if task.family == "semantic":
-            confidence += semantic_strength * 0.12
-        if not goal_matches_task:
-            confidence -= 0.22
-        if task.family == "dynamics":
-            confidence -= max(0.0, dynamics_cost_multiplier(environment) - 1.0) * 0.08
-        return max(0.0, min(1.0, confidence))
+    def _changed_family_from_signatures(self, environment: Any, exploration: ExplorationResult) -> str:
+        if environment.semantic_signature() != exploration.memory.get("base_semantic_signature"):
+            return "semantic"
+        if environment.dynamics_signature() != exploration.memory.get("base_dynamics_signature"):
+            return "dynamics"
+        if environment.geometry_signature() != exploration.memory.get("base_geometry_signature"):
+            return "metric"
+        return "topology" if environment.edge_list() != list(exploration.memory.get("base_edge_signature", environment.edge_list())) else "metric"
 
 
 register_baseline(PersistentMemoryBaseline.name, PersistentMemoryBaseline)

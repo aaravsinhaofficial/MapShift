@@ -95,6 +95,8 @@ class BaselineModel(Protocol):
 
     name: str
     category: str
+    learnable: bool
+    implementation_kind: str
     parameter_count: int
     trainable_parameter_count: int
 
@@ -116,6 +118,8 @@ class BaseBaselineModel:
 
     name = "baseline"
     category = "generic"
+    learnable = False
+    implementation_kind = "deterministic_calibration_wrapper"
     parameter_count = 0
     trainable_parameter_count = 0
 
@@ -128,8 +132,11 @@ class BaseBaselineModel:
         return {
             "name": self.name,
             "category": self.category,
+            "learnable": self.learnable,
+            "implementation_kind": self.implementation_kind,
             "parameter_count": self.parameter_count,
             "trainable_parameter_count": self.trainable_parameter_count,
+            "parameter_count_semantics": "trainable_model_parameters" if self.learnable else "deterministic_wrapper_complexity_proxy",
             "seed": self.seed,
             "parameters": dict(self.parameters),
         }
@@ -263,6 +270,7 @@ def summarize_exploration_memory(environment: Map2DEnvironment, visited_cells: t
         "remembered_goal_tokens": dict(environment.goal_tokens),
         "remembered_landmarks": dict(environment.landmark_by_node),
         "base_geometry_signature": environment.geometry_signature(),
+        "base_edge_signature": tuple(environment.edge_list()),
         "base_semantic_signature": environment.semantic_signature(),
         "base_dynamics_signature": environment.dynamics_signature(),
         "visible_landmarks": tuple(sorted(visible_landmarks)),

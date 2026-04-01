@@ -190,6 +190,7 @@ class CalibrationBaselineTests(unittest.TestCase):
         self.assertEqual(model.name, "monolithic_recurrent_world_model")
         self.assertGreater(model.parameter_count, 0)
         self.assertEqual(model.parameter_count, model.trainable_parameter_count)
+        self.assertTrue(model.describe()["learnable"])
         self.assertEqual(model.describe()["parameters"]["hidden_size"], 12)
 
     def test_memory_wrapper_is_config_driven_and_tracks_parameters(self) -> None:
@@ -199,6 +200,7 @@ class CalibrationBaselineTests(unittest.TestCase):
         self.assertEqual(model.name, "persistent_memory_world_model")
         self.assertGreater(model.parameter_count, 0)
         self.assertEqual(model.parameter_count, model.trainable_parameter_count)
+        self.assertTrue(model.describe()["learnable"])
         self.assertEqual(model.describe()["parameters"]["memory_slots"], 16)
 
     def test_relational_wrapper_is_config_driven_and_tracks_parameters(self) -> None:
@@ -208,7 +210,22 @@ class CalibrationBaselineTests(unittest.TestCase):
         self.assertEqual(model.name, "relational_graph_world_model")
         self.assertGreater(model.parameter_count, 0)
         self.assertEqual(model.parameter_count, model.trainable_parameter_count)
+        self.assertTrue(model.describe()["learnable"])
         self.assertEqual(model.describe()["parameters"]["message_passing_steps"], 2)
+
+    def test_exploration_trains_recurrent_world_model(self) -> None:
+        bundle = load_release_bundle(ROOT_CONFIG)
+        generator = Map2DGenerator(bundle.env2d)
+        environment = generator.generate(seed=13, motif_tag="simple_loop").environment
+        config = load_baseline_run_config(RECURRENT_CONFIG)
+        model = instantiate_baseline(config)
+        context = BaselineContext(model_name=model.name, exploration_budget_steps=config.exploration_budget_steps, seed=config.seed)
+
+        exploration = run_exploration(model, environment, context)
+
+        self.assertIn("training_summary", exploration.memory)
+        self.assertGreaterEqual(exploration.memory["training_summary"]["training_epochs"], 1)
+        self.assertIn("checkpoint_path", exploration.memory["training_summary"])
 
     def test_relational_baseline_detects_topology_change(self) -> None:
         bundle = load_release_bundle(ROOT_CONFIG)

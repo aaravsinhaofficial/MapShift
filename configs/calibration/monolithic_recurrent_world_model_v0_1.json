@@ -7,10 +7,9 @@
   "parameters": {
     "hidden_size": 12,
     "observation_stride": 2,
-    "metric_penalty": 0.12,
-    "topology_penalty": 0.28,
-    "dynamics_penalty": 0.18,
-    "semantic_penalty": 0.32,
-    "adaptation_gain": 0.18
+    "training_epochs": 6,
+    "learning_rate": 0.01,
+    "max_rollout_steps": 8,
+    "checkpoint_dir": "/tmp/mapshift_learned_baselines"
   }
 }

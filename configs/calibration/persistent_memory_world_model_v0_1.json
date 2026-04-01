@@ -8,13 +8,9 @@
     "memory_slots": 16,
     "slot_stride": 3,
     "readout_width": 8,
-    "metric_penalty": 0.10,
-    "topology_penalty": 0.16,
-    "dynamics_penalty": 0.17,
-    "semantic_penalty": 0.19,
-    "route_revision_bonus": 0.12,
-    "semantic_refresh_bonus": 0.16,
-    "semantic_update_threshold": 0.56,
-    "adaptation_gain": 0.24
+    "training_epochs": 8,
+    "learning_rate": 0.01,
+    "max_rollout_steps": 8,
+    "checkpoint_dir": "/tmp/mapshift_learned_baselines"
   }
 }
