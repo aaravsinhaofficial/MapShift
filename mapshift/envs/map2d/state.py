@@ -29,6 +29,17 @@ def _manhattan(left: Cell, right: Cell) -> int:
     return abs(left[0] - right[0]) + abs(left[1] - right[1])
 
 
+def _token_symbol(token: str) -> str:
+    suffix = token.split("_", 1)[-1]
+    for char in suffix:
+        if char.isalpha():
+            return char.upper()
+    for char in token:
+        if char.isalpha():
+            return char.upper()
+    return "?"
+
+
 def _orthogonal_path(start: Cell, goal: Cell, prefer_horizontal: bool) -> list[Cell]:
     """Return a deterministic L-shaped path between two cells."""
 
@@ -293,6 +304,13 @@ class Map2DEnvironment:
     def free_cell_count(self) -> int:
         return sum(1 for row in self.occupancy_grid for cell in row if cell == 0)
 
+    def corridor_for_edge(self, left: str, right: str) -> tuple[Cell, ...]:
+        return tuple(self.edge_corridors.get(_edge_key(left, right), ()))
+
+    def corridor_is_traversable(self, corridor: Iterable[Cell]) -> bool:
+        cells = tuple(corridor)
+        return bool(cells) and all(self.is_free(cell) for cell in cells)
+
     def in_bounds(self, cell: Cell) -> bool:
         row, col = cell
         return 0 <= row < self.height_cells and 0 <= col < self.width_cells
@@ -493,7 +511,7 @@ class Map2DEnvironment:
                 return self.landmark_by_node[node_id][:1].upper()
             for token, goal_node in self.goal_tokens.items():
                 if goal_node == node_id:
-                    return token[-1].upper()
+                    return _token_symbol(token)
         return ""
 
     def _restore_edge(self, left: str, right: str, corridor: list[Cell]) -> None:

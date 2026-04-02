@@ -51,3 +51,11 @@ def load_checkpoint(path: str | Path) -> dict[str, Any]:
     """Load one Torch checkpoint payload."""
 
     return torch.load(Path(path), map_location="cpu", weights_only=False)
+
+
+def count_parameters(model: torch.nn.Module) -> tuple[int, int]:
+    """Return total and trainable parameter counts for one Torch model."""
+
+    total = sum(parameter.numel() for parameter in model.parameters())
+    trainable = sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad)
+    return int(total), int(trainable)
