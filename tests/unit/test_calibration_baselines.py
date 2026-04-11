@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import unittest
 from pathlib import Path
 
@@ -23,6 +24,7 @@ HEURISTIC_CONFIG = REPO_ROOT / "configs" / "calibration" / "weak_heuristic_basel
 RECURRENT_CONFIG = REPO_ROOT / "configs" / "calibration" / "monolithic_recurrent_world_model_v0_1.json"
 MEMORY_CONFIG = REPO_ROOT / "configs" / "calibration" / "persistent_memory_world_model_v0_1.json"
 RELATIONAL_CONFIG = REPO_ROOT / "configs" / "calibration" / "relational_graph_world_model_v0_1.json"
+TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 
 
 def corridor_environment() -> Map2DEnvironment:
@@ -183,6 +185,7 @@ class CalibrationBaselineTests(unittest.TestCase):
 
         self.assertEqual(first.to_dict(), second.to_dict())
 
+    @unittest.skipUnless(TORCH_AVAILABLE, "torch is required for learned baseline tests")
     def test_recurrent_wrapper_is_config_driven_and_tracks_parameters(self) -> None:
         config = load_baseline_run_config(RECURRENT_CONFIG)
         model = instantiate_baseline(config)
@@ -193,6 +196,7 @@ class CalibrationBaselineTests(unittest.TestCase):
         self.assertTrue(model.describe()["learnable"])
         self.assertEqual(model.describe()["parameters"]["hidden_size"], 12)
 
+    @unittest.skipUnless(TORCH_AVAILABLE, "torch is required for learned baseline tests")
     def test_memory_wrapper_is_config_driven_and_tracks_parameters(self) -> None:
         config = load_baseline_run_config(MEMORY_CONFIG)
         model = instantiate_baseline(config)
@@ -203,6 +207,7 @@ class CalibrationBaselineTests(unittest.TestCase):
         self.assertTrue(model.describe()["learnable"])
         self.assertEqual(model.describe()["parameters"]["memory_slots"], 16)
 
+    @unittest.skipUnless(TORCH_AVAILABLE, "torch is required for learned baseline tests")
     def test_relational_wrapper_is_config_driven_and_tracks_parameters(self) -> None:
         config = load_baseline_run_config(RELATIONAL_CONFIG)
         model = instantiate_baseline(config)
@@ -213,6 +218,7 @@ class CalibrationBaselineTests(unittest.TestCase):
         self.assertTrue(model.describe()["learnable"])
         self.assertEqual(model.describe()["parameters"]["message_passing_steps"], 2)
 
+    @unittest.skipUnless(TORCH_AVAILABLE, "torch is required for learned baseline tests")
     def test_exploration_trains_recurrent_world_model(self) -> None:
         bundle = load_release_bundle(ROOT_CONFIG)
         generator = Map2DGenerator(bundle.env2d)
@@ -227,6 +233,7 @@ class CalibrationBaselineTests(unittest.TestCase):
         self.assertGreaterEqual(exploration.memory["training_summary"]["training_epochs"], 1)
         self.assertIn("checkpoint_path", exploration.memory["training_summary"])
 
+    @unittest.skipUnless(TORCH_AVAILABLE, "torch is required for learned baseline tests")
     def test_relational_baseline_detects_topology_change(self) -> None:
         bundle = load_release_bundle(ROOT_CONFIG)
         generator = Map2DGenerator(bundle.env2d)
@@ -273,6 +280,7 @@ class CalibrationBaselineTests(unittest.TestCase):
         self.assertFalse(result.solvable)
         self.assertTrue(result.metadata["impossible_for_oracle"])
 
+    @unittest.skipUnless(TORCH_AVAILABLE, "torch is required for learned baseline tests")
     def test_calibration_suite_runs_end_to_end_for_five_baselines(self) -> None:
         bundle = load_release_bundle(ROOT_CONFIG)
         report = run_calibration_suite(

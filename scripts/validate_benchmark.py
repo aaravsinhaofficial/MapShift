@@ -13,6 +13,8 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from mapshift.core.schemas import ConfigValidationError, load_release_bundle
+from mapshift.envs.procthor.generator import ProcTHORGenerator
+from mapshift.envs.procthor.validation import validate_procthor_scene
 from mapshift.splits.builders import build_canonical_release_split_bundle
 
 
@@ -38,6 +40,10 @@ def main() -> int:
         return 1
 
     split_bundle = build_canonical_release_split_bundle(bundle, sample_count_per_motif=1, task_samples_per_class=1)
+    procthor_generator = ProcTHORGenerator(bundle.env3d)
+    procthor_result = procthor_generator.sample(seed=13)
+    procthor_scene = procthor_result.scene
+    procthor_issues = validate_procthor_scene(procthor_scene) if procthor_scene is not None else ["generator_returned_no_scene"]
     summary = bundle.summary() | {
         "split_validation_ok": split_bundle.ok,
         "split_validation_issues": list(split_bundle.validation_issues),
@@ -46,6 +52,9 @@ def main() -> int:
         "split_environment_counts": {
             split_name: len(manifest.environment_ids) for split_name, manifest in sorted(split_bundle.manifests.items())
         },
+        "env3d_smoke_ok": not procthor_issues,
+        "env3d_smoke_issues": procthor_issues,
+        "env3d_backend_mode": procthor_generator.backend_status.get("mode", "unknown"),
     }
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0 if split_bundle.ok else 1

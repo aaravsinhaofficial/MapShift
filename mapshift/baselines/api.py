@@ -15,6 +15,19 @@ from mapshift.envs.map2d.state import AgentPose2D, Cell, Map2DEnvironment
 
 
 _BASELINE_FACTORIES: Registry[Callable[["BaselineRunConfig"], "BaseBaselineModel"]] = Registry("baseline_factory")
+_KNOWN_BASELINE_TIERS: dict[str, tuple[str, ...]] = {
+    "oracle_post_intervention_planner": ("mapshift_2d", "mapshift_3d"),
+    "same_environment_upper_baseline": ("mapshift_2d", "mapshift_3d"),
+    "weak_heuristic_baseline": ("mapshift_2d", "mapshift_3d"),
+    "monolithic_recurrent_world_model": ("mapshift_2d",),
+    "persistent_memory_world_model": ("mapshift_2d",),
+    "relational_graph_world_model": ("mapshift_2d",),
+}
+_TORCH_OPTIONAL_BASELINES = {
+    "monolithic_recurrent_world_model",
+    "persistent_memory_world_model",
+    "relational_graph_world_model",
+}
 
 
 @dataclass(frozen=True)
@@ -99,6 +112,7 @@ class BaselineModel(Protocol):
     implementation_kind: str
     parameter_count: int
     trainable_parameter_count: int
+    supported_tiers: tuple[str, ...]
 
     def describe(self) -> dict[str, Any]:
         ...
@@ -122,6 +136,7 @@ class BaseBaselineModel:
     implementation_kind = "deterministic_calibration_wrapper"
     parameter_count = 0
     trainable_parameter_count = 0
+    supported_tiers = ("mapshift_2d",)
 
     def __init__(self, run_config: BaselineRunConfig) -> None:
         self.run_config = run_config
@@ -136,6 +151,7 @@ class BaseBaselineModel:
             "implementation_kind": self.implementation_kind,
             "parameter_count": self.parameter_count,
             "trainable_parameter_count": self.trainable_parameter_count,
+            "supported_tiers": list(self.supported_tiers),
             "parameter_count_semantics": "trainable_model_parameters" if self.learnable else "deterministic_wrapper_complexity_proxy",
             "seed": self.seed,
             "parameters": dict(self.parameters),
@@ -153,16 +169,33 @@ def register_baseline(name: str, factory: Callable[[BaselineRunConfig], BaseBase
     _BASELINE_FACTORIES.register(name, factory)
 
 
+def supported_tiers_for_baseline_name(name: str) -> tuple[str, ...]:
+    """Return the declared supported tiers for a registered or known baseline."""
+
+    return _KNOWN_BASELINE_TIERS.get(name, ("mapshift_2d",))
+
+
 def _ensure_builtin_registrations() -> None:
     """Import built-in calibration baselines so they self-register."""
 
-    from . import heuristic, memory, oracle, recurrent, relational  # noqa: F401
+    from . import heuristic, oracle  # noqa: F401
+
+    for module_name in ("memory", "recurrent", "relational"):
+        try:
+            __import__(f"{__package__}.{module_name}", fromlist=[module_name])
+        except ModuleNotFoundError as exc:
+            if exc.name != "torch":
+                raise
 
 
 def instantiate_baseline(run_config: BaselineRunConfig) -> BaseBaselineModel:
     """Instantiate a registered baseline from a run config."""
 
     _ensure_builtin_registrations()
+    if run_config.baseline_name not in _BASELINE_FACTORIES and run_config.baseline_name in _TORCH_OPTIONAL_BASELINES:
+        raise ModuleNotFoundError(
+            f"Baseline {run_config.baseline_name!r} requires the optional 'torch' dependency, which is not available."
+        )
     return _BASELINE_FACTORIES.get(run_config.baseline_name)(run_config)
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import tempfile
 import unittest
@@ -19,8 +20,10 @@ from mapshift.core.schemas import load_release_bundle
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT_CONFIG = REPO_ROOT / "configs" / "benchmark" / "release_v0_1.json"
 SMOKE_STUDY_CONFIG = REPO_ROOT / "configs" / "analysis" / "mapshift_2d_full_study_smoke_v0_1.json"
+TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 
 
+@unittest.skipUnless(TORCH_AVAILABLE, "torch is required for the learned-baseline 2D study integration test")
 class MapShift2DStudyIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

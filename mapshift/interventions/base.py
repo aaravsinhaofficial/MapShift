@@ -12,6 +12,7 @@ from mapshift.core.schemas import FamilyInterventionConfig
 from mapshift.splits.motifs import semantic_template_metadata, stable_template_hash, structural_signature_for_environment
 
 from mapshift.envs.map2d.state import Map2DEnvironment
+from mapshift.envs.procthor.wrappers import ProcTHORScene
 
 
 @dataclass(frozen=True)
@@ -46,13 +47,15 @@ class BaseIntervention:
 
     def _invalidate_cached_metadata(
         self,
-        environment: Map2DEnvironment,
+        environment: Any,
         *,
         invalidate_structural: bool = False,
         invalidate_semantic: bool = False,
     ) -> None:
         """Drop derived tags/signatures that are no longer valid after an edit."""
 
+        if not hasattr(environment, "metadata") or not isinstance(environment.metadata, dict):
+            return
         if invalidate_structural:
             for key in ("motif_tags", "structural_signature", "node_role_template_ids"):
                 environment.metadata.pop(key, None)
@@ -68,24 +71,46 @@ class BaseIntervention:
 
     def _build_manifest(
         self,
-        environment: Map2DEnvironment,
-        transformed_environment: Map2DEnvironment,
+        environment: Any,
+        transformed_environment: Any,
         severity: int,
         severity_value: float,
         seed: int,
     ) -> InterventionManifest:
-        source_structural = environment.metadata.get("structural_signature")
-        if not isinstance(source_structural, dict):
-            source_structural = structural_signature_for_environment(environment).to_dict()
-        target_structural = structural_signature_for_environment(transformed_environment).to_dict()
-        target_semantics = semantic_template_metadata(transformed_environment)
-        transformed_environment.metadata.update(
-            {
-                "motif_tags": list(target_structural["motif_tags"]),
-                "structural_signature": target_structural,
-                **target_semantics,
-            }
-        )
+        if isinstance(environment, Map2DEnvironment) and isinstance(transformed_environment, Map2DEnvironment):
+            source_structural = environment.metadata.get("structural_signature")
+            if not isinstance(source_structural, dict):
+                source_structural = structural_signature_for_environment(environment).to_dict()
+            target_structural = structural_signature_for_environment(transformed_environment).to_dict()
+            target_semantics = semantic_template_metadata(transformed_environment)
+            transformed_environment.metadata.update(
+                {
+                    "motif_tags": list(target_structural["motif_tags"]),
+                    "structural_signature": target_structural,
+                    **target_semantics,
+                }
+            )
+            source_semantic_template_id = environment.metadata.get("semantic_template_id", "")
+            target_semantic_template_id = target_semantics["semantic_template_id"]
+            transformed_environment_id = transformed_environment.environment_id
+            serialized_environment = transformed_environment.to_dict()
+        elif isinstance(environment, ProcTHORScene) and isinstance(transformed_environment, ProcTHORScene):
+            source_structural = {"scene_structural_signature": list(environment.structural_signature())}
+            target_structural = {"scene_structural_signature": list(transformed_environment.structural_signature())}
+            source_semantic_template_id = stable_template_hash({"semantic_signature": list(environment.semantic_signature())})
+            target_semantic_template_id = stable_template_hash({"semantic_signature": list(transformed_environment.semantic_signature())})
+            transformed_environment.metadata.update(
+                {
+                    "motif_tags": [transformed_environment.motif_tag, str(transformed_environment.metadata.get("motif_family", ""))],
+                    "structural_signature": target_structural,
+                    "semantic_template_id": target_semantic_template_id,
+                }
+            )
+            transformed_environment_id = transformed_environment.scene_id
+            serialized_environment = transformed_environment.to_dict()
+        else:
+            raise TypeError(f"Unsupported intervention substrate: {type(environment).__name__}")
+
         family_shift_metadata = dict(transformed_environment.metadata.get(f"{self.family}_shift", {}))
         intervention_template_id = stable_template_hash(
             {
@@ -106,14 +131,14 @@ class BaseIntervention:
             parent_ids=[environment.environment_id],
             seed_values=[seed],
             metadata={
-                "transformed_environment_id": transformed_environment.environment_id,
+                "transformed_environment_id": transformed_environment_id,
                 "source_structural_signature": source_structural,
                 "target_structural_signature": target_structural,
-                "source_semantic_template_id": environment.metadata.get("semantic_template_id", ""),
-                "target_semantic_template_id": target_semantics["semantic_template_id"],
+                "source_semantic_template_id": source_semantic_template_id,
+                "target_semantic_template_id": target_semantic_template_id,
                 "intervention_template_id": intervention_template_id,
                 "family_shift_metadata": family_shift_metadata,
-                "serialized_environment": transformed_environment.to_dict(),
+                "serialized_environment": serialized_environment,
             },
             base_environment_id=environment.environment_id,
             intervention_family=self.family,

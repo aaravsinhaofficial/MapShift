@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from mapshift.envs.map2d.state import Map2DEnvironment
+from mapshift.envs.procthor.wrappers import ProcTHORScene
 from mapshift.splits.motifs import stable_template_hash
 
 from .base import BaseIntervention, InterventionResult
@@ -11,9 +12,14 @@ from .base import BaseIntervention, InterventionResult
 class TopologyIntervention(BaseIntervention):
     family = "topology"
 
-    def apply(self, environment: Map2DEnvironment, severity: int, seed: int) -> InterventionResult:
+    def apply(self, environment: Map2DEnvironment | ProcTHORScene, severity: int, seed: int) -> InterventionResult:
         severity_value, operations = self._severity_config(severity)
-        transformed = environment.clone(environment_id=f"{environment.environment_id}-topology-s{severity}")
+        if isinstance(environment, Map2DEnvironment):
+            transformed = environment.clone(environment_id=f"{environment.environment_id}-topology-s{severity}")
+            history_target = transformed.history
+        else:
+            transformed = environment.clone(scene_id=f"{environment.scene_id}-topology-s{severity}")
+            history_target = transformed.metadata.setdefault("history", [])
         self._invalidate_cached_metadata(transformed, invalidate_structural=True, invalidate_semantic=True)
         applied_operations: list[str] = []
         protected_edges: set[tuple[str, str]] = set()
@@ -57,7 +63,7 @@ class TopologyIntervention(BaseIntervention):
                 else:
                     transformed.add_edge(left, right)
 
-        transformed.history.append(f"topology:{','.join(operations)}")
+        history_target.append(f"topology:{','.join(operations)}")
         transformed.metadata["topology_shift"] = {
             "severity": severity,
             "value": severity_value,

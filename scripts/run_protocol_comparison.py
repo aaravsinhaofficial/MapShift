@@ -16,6 +16,21 @@ from mapshift.core.schemas import load_release_bundle
 from mapshift.runners.compare_protocols import run_protocol_comparison_suite
 
 
+def _default_run_configs_for_tier(tier: str) -> list[str]:
+    if tier == "mapshift_3d":
+        return [
+            "configs/calibration/oracle_post_intervention_planner_v0_1.json",
+            "configs/calibration/weak_heuristic_baseline_v0_1.json",
+        ]
+    return [
+        "configs/calibration/oracle_post_intervention_planner_v0_1.json",
+        "configs/calibration/weak_heuristic_baseline_v0_1.json",
+        "configs/calibration/monolithic_recurrent_world_model_v0_1.json",
+        "configs/calibration/persistent_memory_world_model_v0_1.json",
+        "configs/calibration/relational_graph_world_model_v0_1.json",
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("config", nargs="?", default="configs/benchmark/release_v0_1.json")
@@ -26,24 +41,21 @@ def main() -> int:
         default=[],
         help="Path to a baseline run config. May be provided multiple times.",
     )
+    parser.add_argument("--tier", choices=("mapshift_2d", "mapshift_3d"), default=None)
     parser.add_argument("--samples-per-motif", type=int, default=1)
     parser.add_argument("--task-samples-per-class", type=int, default=1)
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
 
     bundle = load_release_bundle(args.config)
-    run_configs = args.run_configs or [
-        "configs/calibration/oracle_post_intervention_planner_v0_1.json",
-        "configs/calibration/weak_heuristic_baseline_v0_1.json",
-        "configs/calibration/monolithic_recurrent_world_model_v0_1.json",
-        "configs/calibration/persistent_memory_world_model_v0_1.json",
-        "configs/calibration/relational_graph_world_model_v0_1.json",
-    ]
+    active_tier = args.tier or bundle.root.primary_tier
+    run_configs = args.run_configs or _default_run_configs_for_tier(active_tier)
     report = run_protocol_comparison_suite(
         release_bundle=bundle,
         baseline_run_configs=run_configs,
         sample_count_per_motif=args.samples_per_motif,
         task_samples_per_class=args.task_samples_per_class,
+        tier=active_tier,
     )
     payload = report.to_dict()
     if args.output is not None:

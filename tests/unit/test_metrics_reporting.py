@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import unittest
 from pathlib import Path
 
@@ -19,6 +20,7 @@ HEURISTIC_CONFIG = REPO_ROOT / "configs" / "calibration" / "weak_heuristic_basel
 RECURRENT_CONFIG = REPO_ROOT / "configs" / "calibration" / "monolithic_recurrent_world_model_v0_1.json"
 MEMORY_CONFIG = REPO_ROOT / "configs" / "calibration" / "persistent_memory_world_model_v0_1.json"
 RELATIONAL_CONFIG = REPO_ROOT / "configs" / "calibration" / "relational_graph_world_model_v0_1.json"
+TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 
 
 class MetricsReportingTests(unittest.TestCase):
@@ -54,6 +56,7 @@ class MetricsReportingTests(unittest.TestCase):
         self.assertLess(kendall_tau(order_a, order_b), 1.0)
         self.assertTrue(rank_reversals(order_a, order_b))
 
+    @unittest.skipUnless(TORCH_AVAILABLE, "torch is required for learned baseline metrics tests")
     def test_calibration_report_contains_grouped_metrics_and_bootstrap_rows(self) -> None:
         bundle = load_release_bundle(ROOT_CONFIG)
         report = run_calibration_suite(
@@ -73,6 +76,7 @@ class MetricsReportingTests(unittest.TestCase):
         self.assertIn("tables", report.report_artifacts)
         self.assertIn("familywise_main_results", report.report_artifacts["tables"])
 
+    @unittest.skipUnless(TORCH_AVAILABLE, "torch is required for learned baseline metrics tests")
     def test_protocol_comparison_outputs_exist_on_small_fixture_run(self) -> None:
         bundle = load_release_bundle(ROOT_CONFIG)
         report = run_protocol_comparison_suite(

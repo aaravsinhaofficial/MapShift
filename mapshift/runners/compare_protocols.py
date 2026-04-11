@@ -17,6 +17,7 @@ class ProtocolComparisonReport:
 
     release_name: str
     benchmark_version: str
+    tier: str
     protocol_reports: dict[str, dict[str, Any]]
     pairwise_comparisons: dict[str, Any]
     pooled_vs_familywise: dict[str, Any]
@@ -45,6 +46,7 @@ def run_protocol_comparison_suite(
     motif_tags: Sequence[str] | None = None,
     family_names: Sequence[str] | None = None,
     protocol_names: Sequence[str] | None = None,
+    tier: str | None = None,
 ) -> ProtocolComparisonReport:
     """Run the configured protocol comparisons for the current release bundle."""
 
@@ -60,6 +62,7 @@ def run_protocol_comparison_suite(
             protocol=DEFAULT_PROTOCOLS[protocol_name],
             motif_tags=motif_tags,
             family_names=family_names,
+            tier=tier,
         )
 
     pairwise = {}
@@ -74,6 +77,7 @@ def run_protocol_comparison_suite(
     return ProtocolComparisonReport(
         release_name=release_bundle.root.release_name,
         benchmark_version=release_bundle.root.benchmark_version,
+        tier=tier or release_bundle.root.primary_tier,
         protocol_reports=protocol_payloads,
         pairwise_comparisons=pairwise,
         pooled_vs_familywise=pooled_vs_familywise,

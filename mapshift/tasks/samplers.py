@@ -11,7 +11,8 @@ from typing import Any
 from mapshift.core.manifests import TaskManifest
 from mapshift.core.schemas import TaskConfig
 from mapshift.envs.map2d.state import Map2DEnvironment
-from mapshift.splits.motifs import task_template_metadata
+from mapshift.envs.procthor.wrappers import ProcTHORScene
+from mapshift.splits.motifs import stable_template_hash, task_template_metadata
 
 from .adaptation import AdaptationTask
 from .inference import InferenceTask
@@ -59,8 +60,8 @@ class TaskSampler:
 
     def sample(
         self,
-        base_environment: Map2DEnvironment,
-        intervened_environment: Map2DEnvironment,
+        base_environment: Map2DEnvironment | ProcTHORScene,
+        intervened_environment: Map2DEnvironment | ProcTHORScene,
         family: str,
         seed: int,
         task_class: str | None = None,
@@ -128,8 +129,8 @@ class TaskSampler:
 
     def _sample_for_class(
         self,
-        base_environment: Map2DEnvironment,
-        intervened_environment: Map2DEnvironment,
+        base_environment: Map2DEnvironment | ProcTHORScene,
+        intervened_environment: Map2DEnvironment | ProcTHORScene,
         family: str,
         rng: random.Random,
         selected_class: str,
@@ -144,8 +145,8 @@ class TaskSampler:
 
     def _sample_planning(
         self,
-        base_environment: Map2DEnvironment,
-        intervened_environment: Map2DEnvironment,
+        base_environment: Map2DEnvironment | ProcTHORScene,
+        intervened_environment: Map2DEnvironment | ProcTHORScene,
         family: str,
         rng: random.Random,
     ) -> PlanningTask:
@@ -186,14 +187,18 @@ class TaskSampler:
         elif family == "semantic" and semantic_changed and changed_token and "navigate_changed_cue_semantics" in cfg.task_types:
             task_type = "navigate_changed_cue_semantics"
             goal_token = changed_token
-            goal_node = intervened_environment.goal_tokens[goal_token]
-            comparison_goal_node = base_environment.goal_tokens.get(goal_token, goal_node)
+            goal_node = self._goal_target_for_token(intervened_environment, goal_token)
+            comparison_goal_node = self._goal_target_for_token(base_environment, goal_token, fallback=goal_node)
             if goal_node == start_node:
-                alternative_tokens = [token for token, node_id in intervened_environment.goal_tokens.items() if node_id != start_node]
+                alternative_tokens = [
+                    token
+                    for token in sorted(intervened_environment.goal_tokens)
+                    if self._goal_target_for_token(intervened_environment, token) != start_node
+                ]
                 if alternative_tokens:
                     goal_token = alternative_tokens[0]
-                    goal_node = intervened_environment.goal_tokens[goal_token]
-                    comparison_goal_node = base_environment.goal_tokens.get(goal_token, goal_node)
+                    goal_node = self._goal_target_for_token(intervened_environment, goal_token)
+                    comparison_goal_node = self._goal_target_for_token(base_environment, goal_token, fallback=goal_node)
                 else:
                     self._reject(
                         family=family,
@@ -222,7 +227,7 @@ class TaskSampler:
             metric_changed=metric_changed,
             route_changed=route_changed,
         )
-        template_metadata = task_template_metadata(
+        template_metadata = self._task_template_metadata(
             environment=intervened_environment,
             task_class="planning",
             task_type=task_type,
@@ -254,8 +259,8 @@ class TaskSampler:
 
     def _sample_inference(
         self,
-        base_environment: Map2DEnvironment,
-        intervened_environment: Map2DEnvironment,
+        base_environment: Map2DEnvironment | ProcTHORScene,
+        intervened_environment: Map2DEnvironment | ProcTHORScene,
         family: str,
         rng: random.Random,
     ) -> InferenceTask:
@@ -272,9 +277,14 @@ class TaskSampler:
             expected_output_type = "boolean"
         elif family == "semantic" and semantic_changed and changed_token and "counterfactual_reachability_query" in cfg.task_types:
             task_type = "counterfactual_reachability_query"
-            query = f"Which node does token {changed_token} refer to after the semantic intervention?"
-            expected_answer = intervened_environment.goal_tokens[changed_token]
-            expected_output_type = "node_id"
+            if isinstance(intervened_environment, ProcTHORScene):
+                query = f"Which room does token {changed_token} refer to after the semantic intervention?"
+                expected_answer = self._goal_target_for_token(intervened_environment, changed_token)
+                expected_output_type = "room_id"
+            else:
+                query = f"Which node does token {changed_token} refer to after the semantic intervention?"
+                expected_answer = intervened_environment.goal_tokens[changed_token]
+                expected_output_type = "node_id"
         else:
             task_type = "predict_masked_region_after_intervention"
             query = f"What measurable parameter changed under the {family} intervention?"
@@ -288,7 +298,7 @@ class TaskSampler:
             semantic_changed=semantic_changed,
             changed_token=changed_token,
         )
-        template_metadata = task_template_metadata(
+        template_metadata = self._task_template_metadata(
             environment=intervened_environment,
             task_class="inference",
             task_type=task_type,
@@ -310,8 +320,8 @@ class TaskSampler:
 
     def _sample_adaptation(
         self,
-        base_environment: Map2DEnvironment,
-        intervened_environment: Map2DEnvironment,
+        base_environment: Map2DEnvironment | ProcTHORScene,
+        intervened_environment: Map2DEnvironment | ProcTHORScene,
         family: str,
         rng: random.Random,
     ) -> AdaptationTask:
@@ -336,7 +346,7 @@ class TaskSampler:
             metric_changed=metric_changed,
             dynamics_changed=dynamics_changed,
         )
-        template_metadata = task_template_metadata(
+        template_metadata = self._task_template_metadata(
             environment=intervened_environment,
             task_class="adaptation",
             task_type=task_type,
@@ -357,13 +367,23 @@ class TaskSampler:
             metadata={"base_environment_id": base_environment.environment_id, **template_metadata},
         )
 
-    def _changed_goal_token(self, base_environment: Map2DEnvironment, intervened_environment: Map2DEnvironment) -> str | None:
-        for token, base_node in base_environment.goal_tokens.items():
-            if intervened_environment.goal_tokens.get(token) != base_node:
+    def _changed_goal_token(
+        self,
+        base_environment: Map2DEnvironment | ProcTHORScene,
+        intervened_environment: Map2DEnvironment | ProcTHORScene,
+    ) -> str | None:
+        for token, _base_target in base_environment.goal_tokens.items():
+            if self._goal_target_for_token(intervened_environment, token, fallback="") != self._goal_target_for_token(base_environment, token, fallback=""):
                 return token
         return None
 
-    def _metric_changed(self, base_environment: Map2DEnvironment, intervened_environment: Map2DEnvironment) -> bool:
+    def _metric_changed(
+        self,
+        base_environment: Map2DEnvironment | ProcTHORScene,
+        intervened_environment: Map2DEnvironment | ProcTHORScene,
+    ) -> bool:
+        if isinstance(base_environment, ProcTHORScene) and isinstance(intervened_environment, ProcTHORScene):
+            return base_environment.metric_signature() != intervened_environment.metric_signature()
         return (
             abs(base_environment.geometry_scale - intervened_environment.geometry_scale) > 1e-9
             or abs(base_environment.observation_radius_m - intervened_environment.observation_radius_m) > 1e-9
@@ -371,8 +391,8 @@ class TaskSampler:
 
     def _select_topology_planning_pair(
         self,
-        base_environment: Map2DEnvironment,
-        intervened_environment: Map2DEnvironment,
+        base_environment: Map2DEnvironment | ProcTHORScene,
+        intervened_environment: Map2DEnvironment | ProcTHORScene,
     ) -> dict[str, Any] | None:
         candidates = self._topology_planning_candidates(base_environment, intervened_environment)
         if not candidates:
@@ -405,11 +425,11 @@ class TaskSampler:
 
     def _topology_planning_candidates(
         self,
-        base_environment: Map2DEnvironment,
-        intervened_environment: Map2DEnvironment,
+        base_environment: Map2DEnvironment | ProcTHORScene,
+        intervened_environment: Map2DEnvironment | ProcTHORScene,
     ) -> list[dict[str, Any]]:
         candidates: list[dict[str, Any]] = []
-        node_ids = sorted(intervened_environment.nodes)
+        node_ids = self._node_ids(intervened_environment)
         for start_index, start_node in enumerate(node_ids):
             for goal_node in node_ids[start_index + 1 :]:
                 before_path = base_environment.shortest_path(start_node, goal_node)
@@ -449,7 +469,7 @@ class TaskSampler:
     def _topology_planning_task_type(
         self,
         planning_config: Any,
-        intervened_environment: Map2DEnvironment,
+        intervened_environment: Map2DEnvironment | ProcTHORScene,
         topology_pair: dict[str, Any],
     ) -> str:
         applied_operations = [str(item) for item in intervened_environment.metadata.get("topology_shift", {}).get("applied_operations", [])]
@@ -536,3 +556,140 @@ class TaskSampler:
         if isinstance(task, AdaptationTask):
             return task.evaluation_horizon_steps
         return int(task.metadata.get("horizon_steps", 1))
+
+    def _goal_target_for_token(
+        self,
+        environment: Map2DEnvironment | ProcTHORScene,
+        token: str,
+        *,
+        fallback: str | None = None,
+    ) -> str:
+        if isinstance(environment, ProcTHORScene):
+            object_id = environment.goal_tokens.get(token)
+            if object_id is None:
+                return fallback or ""
+            return environment.object_by_id(object_id).room_id
+        return environment.goal_tokens.get(token, fallback or "")
+
+    def _node_ids(self, environment: Map2DEnvironment | ProcTHORScene) -> list[str]:
+        if isinstance(environment, ProcTHORScene):
+            return sorted(environment.rooms)
+        return sorted(environment.nodes)
+
+    def _task_template_metadata(
+        self,
+        environment: Map2DEnvironment | ProcTHORScene,
+        task_class: str,
+        task_type: str,
+        family: str,
+        start_node_id: str | None,
+        goal_node_id: str | None,
+        *,
+        goal_token: str | None = None,
+        horizon_steps: int | None = None,
+        expected_output_type: str | None = None,
+        adaptation_budget_steps: int | None = None,
+    ) -> dict[str, Any]:
+        if isinstance(environment, ProcTHORScene):
+            return self._task_template_metadata_3d(
+                environment=environment,
+                task_class=task_class,
+                task_type=task_type,
+                family=family,
+                start_node_id=start_node_id,
+                goal_node_id=goal_node_id,
+                goal_token=goal_token,
+                horizon_steps=horizon_steps,
+                expected_output_type=expected_output_type,
+                adaptation_budget_steps=adaptation_budget_steps,
+            )
+        return task_template_metadata(
+            environment=environment,
+            task_class=task_class,
+            task_type=task_type,
+            family=family,
+            start_node_id=start_node_id,
+            goal_node_id=goal_node_id,
+            goal_token=goal_token,
+            horizon_steps=horizon_steps,
+            expected_output_type=expected_output_type,
+            adaptation_budget_steps=adaptation_budget_steps,
+        )
+
+    def _task_template_metadata_3d(
+        self,
+        environment: ProcTHORScene,
+        task_class: str,
+        task_type: str,
+        family: str,
+        start_node_id: str | None,
+        goal_node_id: str | None,
+        *,
+        goal_token: str | None = None,
+        horizon_steps: int | None = None,
+        expected_output_type: str | None = None,
+        adaptation_budget_steps: int | None = None,
+    ) -> dict[str, Any]:
+        distance_steps = None
+        start_goal_template_id = None
+        start_role_template_id = None
+        goal_role_template_id = None
+        if start_node_id is not None:
+            start_role_template_id = stable_template_hash({"room_id": start_node_id, "degree": len(environment.neighbors(start_node_id))})
+            if goal_node_id is not None:
+                goal_role_template_id = stable_template_hash({"room_id": goal_node_id, "degree": len(environment.neighbors(goal_node_id))})
+                move_step = max(float(environment.control.get("move_step_m", 0.25)), 1e-9)
+                distance = environment.shortest_path_length(start_node_id, goal_node_id)
+                distance_steps = -1 if distance is None else int(round(distance / move_step))
+                start_goal_template_id = stable_template_hash(
+                    {
+                        "start_role": start_role_template_id,
+                        "goal_role": goal_role_template_id,
+                        "distance_steps": distance_steps,
+                    }
+                )
+            else:
+                start_goal_template_id = stable_template_hash({"start_role": start_role_template_id, "goal_role": None})
+
+        query_template_id = stable_template_hash(
+            {
+                "task_class": task_class,
+                "task_type": task_type,
+                "family": family,
+                "expected_output_type": expected_output_type,
+            }
+        )
+        budget_template_id = stable_template_hash(
+            {
+                "task_class": task_class,
+                "task_type": task_type,
+                "horizon_steps": horizon_steps,
+                "adaptation_budget_steps": adaptation_budget_steps,
+            }
+        )
+        task_template_id = stable_template_hash(
+            {
+                "task_class": task_class,
+                "task_type": task_type,
+                "family": family,
+                "goal_token": goal_token,
+                "query_template_id": query_template_id,
+                "budget_template_id": budget_template_id,
+                "start_goal_template_id": start_goal_template_id,
+                "scene_fingerprint": stable_template_hash(
+                    {
+                        "motif_tag": environment.motif_tag,
+                        "structural_signature": list(environment.structural_signature()),
+                    }
+                ),
+            }
+        )
+        return {
+            "task_template_id": task_template_id,
+            "query_template_id": query_template_id,
+            "budget_template_id": budget_template_id,
+            "start_goal_template_id": start_goal_template_id,
+            "start_role_template_id": start_role_template_id,
+            "goal_role_template_id": goal_role_template_id,
+            "distance_steps": distance_steps,
+        }

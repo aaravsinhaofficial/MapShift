@@ -17,6 +17,7 @@ from mapshift.baselines.api import (
     build_run_manifest,
     instantiate_baseline,
     load_baseline_run_config,
+    supported_tiers_for_baseline_name,
     task_class_name,
 )
 from mapshift.core.schemas import ReleaseBundle
@@ -37,6 +38,8 @@ from mapshift.tasks.inference import InferenceTask
 from mapshift.tasks.planning import PlanningTask
 from mapshift.tasks.samplers import TaskSampler, TaskSamplingRejected
 from mapshift.envs.map2d.generator import Map2DGenerator
+from mapshift.envs.procthor.generator import ProcTHORGenerator
+from mapshift.envs.procthor.wrappers import ProcTHORScene
 
 
 @dataclass(frozen=True)
@@ -90,6 +93,7 @@ class EvaluationRecord:
 class CalibrationReport:
     release_name: str
     benchmark_version: str
+    tier: str
     protocol_name: str
     sample_count_per_motif: int
     task_samples_per_class: int
@@ -112,6 +116,7 @@ class CalibrationReport:
         return {
             "release_name": self.release_name,
             "benchmark_version": self.benchmark_version,
+            "tier": self.tier,
             "protocol_name": self.protocol_name,
             "sample_count_per_motif": self.sample_count_per_motif,
             "task_samples_per_class": self.task_samples_per_class,
@@ -162,14 +167,23 @@ def run_calibration_suite(
     protocol: EvaluationProtocol | None = None,
     motif_tags: Sequence[str] | None = None,
     family_names: Sequence[str] | None = None,
+    tier: str | None = None,
 ) -> CalibrationReport:
     """Evaluate calibration baselines on one configured MapShift protocol."""
 
     active_protocol = protocol or default_post_intervention_protocol()
+    active_tier = tier or release_bundle.root.primary_tier
     run_configs = [
         config if isinstance(config, BaselineRunConfig) else load_baseline_run_config(config)
         for config in baseline_run_configs
     ]
+    unsupported_configs = sorted(
+        config.baseline_name
+        for config in run_configs
+        if active_tier not in supported_tiers_for_baseline_name(config.baseline_name)
+    )
+    if unsupported_configs:
+        raise ValueError(f"Baselines do not support tier {active_tier}: {', '.join(unsupported_configs)}")
     models = {config.baseline_name: instantiate_baseline(config) for config in run_configs}
     run_contexts = {
         config.baseline_name: BaselineContext(
@@ -177,6 +191,7 @@ def run_calibration_suite(
             exploration_budget_steps=config.exploration_budget_steps,
             seed=config.seed,
             release_name=release_bundle.root.release_name,
+            tier=active_tier,
             protocol_name=active_protocol.name,
         )
         for config in run_configs
@@ -189,7 +204,7 @@ def run_calibration_suite(
             run_name="implicit_oracle_reference",
             baseline_name="oracle_post_intervention_planner",
             seed=0,
-            exploration_budget_steps=release_bundle.env2d.exploration.canonical_budget_steps,
+            exploration_budget_steps=_tier_exploration_budget(release_bundle, active_tier),
             parameters={},
         )
     if oracle_config.baseline_name not in models:
@@ -199,23 +214,27 @@ def run_calibration_suite(
             exploration_budget_steps=oracle_config.exploration_budget_steps,
             seed=oracle_config.seed,
             release_name=release_bundle.root.release_name,
+            tier=active_tier,
             protocol_name=active_protocol.name,
         )
     oracle_model = models[oracle_config.baseline_name]
     oracle_context = run_contexts[oracle_config.baseline_name]
 
-    generator = Map2DGenerator(release_bundle.env2d)
+    if active_tier not in getattr(oracle_model, "supported_tiers", supported_tiers_for_baseline_name(oracle_config.baseline_name)):
+        raise ValueError(f"Oracle baseline does not support tier {active_tier}")
+
+    generator = _generator_for_tier(release_bundle, active_tier)
     sampler = TaskSampler(release_bundle.tasks)
     oracle_explorations: dict[str, ExplorationResult] = {}
     explorations: dict[tuple[str, str], ExplorationResult] = {}
     records: list[EvaluationRecord] = []
 
-    motifs = list(motif_tags or release_bundle.env2d.motif_families)
-    families = list(family_names or release_bundle.interventions.canonical_family_order)
+    motifs = list(motif_tags or _motif_tags_for_tier(release_bundle, generator, active_tier))
+    families = list(family_names or _family_names_for_tier(release_bundle, active_tier))
     for motif_index, motif in enumerate(motifs):
         for sample_index in range(sample_count_per_motif):
             seed = (motif_index + 1) * 100 + sample_index
-            base_environment = generator.generate(seed=seed, motif_tag=motif).environment
+            base_environment = _sample_base_environment(generator, seed=seed, motif_tag=motif)
 
             for model_name, model in models.items():
                 explorations[(model_name, base_environment.environment_id)] = _exploration_for_protocol(
@@ -322,6 +341,7 @@ def run_calibration_suite(
     return CalibrationReport(
         release_name=release_bundle.root.release_name,
         benchmark_version=release_bundle.root.benchmark_version,
+        tier=active_tier,
         protocol_name=active_protocol.name,
         sample_count_per_motif=sample_count_per_motif,
         task_samples_per_class=task_samples_per_class,
@@ -350,24 +370,67 @@ def run_calibration_suite(
 def _exploration_for_protocol(model: Any, base_environment: Any, context: BaselineContext, protocol: EvaluationProtocol) -> ExplorationResult:
     if protocol.exploration_mode == "reward_free":
         return run_exploration(model, base_environment, context)
-    start_cell = base_environment.start_cell
-    return ExplorationResult(
-        baseline_name=model.name,
-        environment_id=base_environment.environment_id,
-        exploration_steps=0,
-        visited_cells=(start_cell,),
-        visited_node_ids=(),
-        hidden_state=(),
-        memory={"visited_ratio": 0.0, "remembered_goal_tokens": {}, "visited_node_ids": ()},
-    )
+    return _empty_exploration(model, base_environment)
 
 
 def _environment_for_protocol(base_environment: Any, family: str, severity: int, intervention: Any, protocol: EvaluationProtocol, seed: int) -> Any:
     if protocol.environment_mode == "post_intervention":
         return intervention.apply(base_environment, severity=severity, seed=seed + severity).environment
+    if isinstance(base_environment, ProcTHORScene):
+        cloned = base_environment.clone(scene_id=f"{base_environment.environment_id}-{protocol.name}-s{severity}-{family}")
+        history = list(cloned.metadata.get("history", []))
+        history.append(f"protocol:{protocol.name}")
+        cloned.metadata["history"] = history
+        return cloned
     cloned = base_environment.clone(environment_id=f"{base_environment.environment_id}-{protocol.name}-s{severity}-{family}")
     cloned.history.append(f"protocol:{protocol.name}")
     return cloned
+
+
+def _generator_for_tier(release_bundle: ReleaseBundle, tier: str) -> Any:
+    if tier == "mapshift_3d":
+        return ProcTHORGenerator(release_bundle.env3d)
+    return Map2DGenerator(release_bundle.env2d)
+
+
+def _motif_tags_for_tier(release_bundle: ReleaseBundle, generator: Any, tier: str) -> list[str]:
+    if tier == "mapshift_3d":
+        return list(getattr(generator, "motif_tags", ()))
+    return list(release_bundle.env2d.motif_families)
+
+
+def _family_names_for_tier(release_bundle: ReleaseBundle, tier: str) -> list[str]:
+    if tier == "mapshift_3d":
+        return list(release_bundle.env3d.supported_intervention_families)
+    return list(release_bundle.interventions.canonical_family_order)
+
+
+def _tier_exploration_budget(release_bundle: ReleaseBundle, tier: str) -> int:
+    if tier == "mapshift_3d":
+        return release_bundle.env3d.exploration.canonical_budget_steps
+    return release_bundle.env2d.exploration.canonical_budget_steps
+
+
+def _sample_base_environment(generator: Any, *, seed: int, motif_tag: str) -> Any:
+    if hasattr(generator, "generate"):
+        return generator.generate(seed=seed, motif_tag=motif_tag).environment
+    return generator.sample(seed=seed, motif_tag=motif_tag).scene
+
+
+def _empty_exploration(model: Any, base_environment: Any) -> ExplorationResult:
+    visited_node_ids = (base_environment.start_node_id,) if hasattr(base_environment, "start_node_id") else ()
+    visited_cells = ()
+    if not isinstance(base_environment, ProcTHORScene) and hasattr(base_environment, "start_cell"):
+        visited_cells = (base_environment.start_cell,)
+    return ExplorationResult(
+        baseline_name=model.name,
+        environment_id=base_environment.environment_id,
+        exploration_steps=0,
+        visited_cells=visited_cells,
+        visited_node_ids=visited_node_ids,
+        hidden_state=(),
+        memory={"visited_ratio": 0.0, "remembered_goal_tokens": {}, "visited_node_ids": visited_node_ids},
+    )
 
 
 def _task_for_protocol(task: Any, protocol: EvaluationProtocol) -> Any:
