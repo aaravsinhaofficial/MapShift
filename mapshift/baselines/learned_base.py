@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
@@ -48,7 +49,7 @@ class LearnedGraphBaseline(BaseBaselineModel, ABC):
         self.training_epochs = max(1, int(self.parameters.get("training_epochs", 8)))
         self.learning_rate = float(self.parameters.get("learning_rate", 0.01))
         self.edge_threshold = float(self.parameters.get("edge_threshold", 0.5))
-        self.checkpoint_dir = str(self.parameters.get("checkpoint_dir", "/tmp/mapshift_learned_baselines"))
+        self.checkpoint_dir = str(os.environ.get("MAPSHIFT_CHECKPOINT_DIR", self.parameters.get("checkpoint_dir", "/tmp/mapshift_learned_baselines")))
         self.adaptation_step_divisor = max(1, int(self.parameters.get("adaptation_step_divisor", 16)))
         self.validation_fraction = min(0.4, max(0.1, float(self.parameters.get("validation_fraction", 0.2))))
         self.early_stopping_patience = max(1, int(self.parameters.get("early_stopping_patience", 3)))

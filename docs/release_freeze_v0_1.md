@@ -20,7 +20,7 @@ Status: frozen 2D benchmark release. The ProcTHOR-compatible 3D files remain pro
 - Main study task samples per class: 3
 - Main learned-baseline model seeds: 0, 1, 2, 3, 4
 - Bootstrap: 1000 resamples, 95% intervals, resampling by `environment_model_seed_id`
-- Learned-baseline Torch device: `torch_device="auto"` in calibration configs; set `MAPSHIFT_TORCH_DEVICE=cuda:0` to pin a CUDA GPU.
+- Learned-baseline Torch device: `torch_device="auto"` in calibration configs; set `MAPSHIFT_TORCH_DEVICE=cuda:0` to pin a CUDA GPU and `MAPSHIFT_CHECKPOINT_DIR` to isolate run checkpoints.
 
 ## Frozen Baseline Roster
 

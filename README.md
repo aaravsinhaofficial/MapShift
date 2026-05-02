@@ -130,6 +130,7 @@ Learned baselines use `torch_device: "auto"` and will select CUDA when a CUDA-en
 
 ```bash
 export MAPSHIFT_TORCH_DEVICE=cuda:0
+export MAPSHIFT_CHECKPOINT_DIR=/tmp/mapshift_learned_baselines_full_v0_1
 ```
 
 To render paper tables/figures again from saved study JSON without rerunning model evaluation:
