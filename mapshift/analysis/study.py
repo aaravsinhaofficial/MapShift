@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Iterable, Sequence
@@ -20,6 +21,9 @@ from mapshift.metrics.statistics import correlation_matrix, mean_or_zero
 from mapshift.baselines.api import BaselineRunConfig, load_baseline_run_config
 from mapshift.runners.compare_protocols import run_protocol_comparison_suite
 from mapshift.runners.evaluate import default_post_intervention_protocol, run_calibration_suite
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -114,6 +118,14 @@ def run_mapshift_2d_study(
 
     bundle = release_bundle or load_release_bundle(study_config.benchmark_config)
     baseline_run_configs = _expanded_baseline_run_configs(study_config)
+    LOGGER.info(
+        "Starting MapShift-2D study=%s baseline_runs=%d motifs=%s families=%s",
+        study_config.study_name,
+        len(baseline_run_configs),
+        list(study_config.motif_tags) if study_config.motif_tags else "<all>",
+        list(study_config.family_names) if study_config.family_names else "<all>",
+    )
+    LOGGER.info("Running primary CEP report")
     cep_report = run_calibration_suite(
         release_bundle=bundle,
         baseline_run_configs=baseline_run_configs,
@@ -124,6 +136,8 @@ def run_mapshift_2d_study(
         motif_tags=study_config.motif_tags or None,
         family_names=study_config.family_names or None,
     )
+    LOGGER.info("Primary CEP report complete records=%d", len(cep_report.records))
+    LOGGER.info("Running protocol sensitivity reports")
     protocol_report = run_protocol_comparison_suite(
         release_bundle=bundle,
         baseline_run_configs=baseline_run_configs,
@@ -134,6 +148,8 @@ def run_mapshift_2d_study(
         family_names=study_config.family_names or None,
         protocol_names=study_config.protocol_names,
     )
+    LOGGER.info("Protocol sensitivity reports complete")
+    LOGGER.info("Generating study benchmark health report")
     benchmark_health = generate_mapshift_2d_benchmark_health_report(
         release_bundle=bundle,
         sample_count_per_motif=study_config.sample_count_per_motif,
@@ -142,6 +158,8 @@ def run_mapshift_2d_study(
         motif_tags=study_config.motif_tags or None,
         family_names=study_config.family_names or None,
     )
+    LOGGER.info("Study benchmark health report complete")
+    LOGGER.info("Building paper-facing study bundle")
     return build_mapshift_2d_study_bundle(
         release_bundle=bundle,
         study_config=study_config,

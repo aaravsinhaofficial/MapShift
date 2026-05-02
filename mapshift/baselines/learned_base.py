@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -36,6 +37,9 @@ from .learned_graph import (
     token_symbol,
     traversal_cost_map,
 )
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class LearnedGraphBaseline(BaseBaselineModel, ABC):
@@ -188,10 +192,23 @@ class LearnedGraphBaseline(BaseBaselineModel, ABC):
         runtime_graph_data = graph_data.to_device(self.torch_device)
 
         if checkpoint.is_file():
+            LOGGER.info(
+                "Loading learned baseline checkpoint baseline=%s environment=%s seed=%s device=%s",
+                self.name,
+                environment_id,
+                seed,
+                self.torch_device,
+            )
             payload = load_checkpoint(checkpoint, map_location=self.torch_device)
             try:
                 model.load_state_dict(payload["state_dict"])
             except RuntimeError:
+                LOGGER.warning(
+                    "Discarding incompatible checkpoint baseline=%s environment=%s path=%s",
+                    self.name,
+                    environment_id,
+                    checkpoint,
+                )
                 checkpoint.unlink(missing_ok=True)
             else:
                 model.eval()
@@ -202,9 +219,25 @@ class LearnedGraphBaseline(BaseBaselineModel, ABC):
                 summary["torch_device_resolved"] = str(self.torch_device)
                 self._model_cache[environment_id] = model
                 self._training_cache[environment_id] = summary
+                LOGGER.info(
+                    "Loaded learned baseline checkpoint baseline=%s environment=%s seed=%s device=%s",
+                    self.name,
+                    environment_id,
+                    seed,
+                    self.torch_device,
+                )
                 return model, summary
 
         set_torch_seed(seed)
+        LOGGER.info(
+            "Training learned baseline baseline=%s environment=%s seed=%s device=%s epochs=%d checkpoint=%s",
+            self.name,
+            environment_id,
+            seed,
+            self.torch_device,
+            self.training_epochs,
+            checkpoint,
+        )
         pair_train_mask, pair_val_mask = self._pair_split_masks(runtime_graph_data)
         node_train_mask, node_val_mask = self._node_split_masks(runtime_graph_data)
 
@@ -280,6 +313,14 @@ class LearnedGraphBaseline(BaseBaselineModel, ABC):
         save_checkpoint(checkpoint, {"state_dict": self._state_dict_on_cpu(model), "training_summary": summary})
         self._model_cache[environment_id] = model
         self._training_cache[environment_id] = summary
+        LOGGER.info(
+            "Finished learned baseline training baseline=%s environment=%s seed=%s epochs=%d best_validation_loss=%s",
+            self.name,
+            environment_id,
+            seed,
+            len(train_curve),
+            summary["best_validation_loss"],
+        )
         return model, summary
 
     def _state_dict_on_cpu(self, model: nn.Module) -> dict[str, torch.Tensor]:

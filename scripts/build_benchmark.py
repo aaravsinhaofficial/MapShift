@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -28,6 +30,26 @@ from render_paper_outputs import render_outputs
 
 
 DEFAULT_SMOKE_STUDY = "configs/analysis/mapshift_2d_full_study_smoke_v0_1.json"
+
+
+def _configure_build_logging(log_file: Path) -> logging.Logger:
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.setLevel(logging.INFO)
+
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(logging.INFO)
+    stream_handler.setFormatter(formatter)
+    root.addHandler(stream_handler)
+
+    file_handler = logging.FileHandler(log_file, mode="w", encoding="utf-8")
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(formatter)
+    root.addHandler(file_handler)
+
+    return logging.getLogger("mapshift.build_benchmark")
 
 
 def _json_hash(payload: Any) -> str:
@@ -163,6 +185,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tier", choices=("mapshift_2d",), default="mapshift_2d")
     parser.add_argument("--study-config", default=DEFAULT_SMOKE_STUDY)
     parser.add_argument("--output-dir", default="")
+    parser.add_argument("--log-file", default="", help="Build log path. Defaults to <output-dir>/logs/build_benchmark.log.")
     parser.add_argument("--samples-per-motif", type=int, default=None)
     parser.add_argument("--task-samples-per-class", type=int, default=None)
     parser.add_argument("--min-cell-coverage", type=int, default=1)
@@ -182,16 +205,48 @@ def main() -> int:
     task_samples_per_class = args.task_samples_per_class or study_config.task_samples_per_class
     output_dir = Path(args.output_dir or f"outputs/releases/{bundle.root.release_name}").resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
+    log_path = Path(args.log_file).resolve() if args.log_file else output_dir / "logs" / "build_benchmark.log"
+    logger = _configure_build_logging(log_path)
+    logger.info("Starting MapShift frozen 2D artifact build")
+    logger.info("Release=%s benchmark_version=%s tier=%s", bundle.root.release_name, bundle.root.benchmark_version, args.tier)
+    logger.info("Benchmark config: %s", Path(args.config).resolve())
+    logger.info("Study config: %s", study_config_path)
+    logger.info("Output directory: %s", output_dir)
+    logger.info("Build log: %s", log_path)
+    logger.info("MAPSHIFT_TORCH_DEVICE=%s", os.environ.get("MAPSHIFT_TORCH_DEVICE", "<unset>"))
+    logger.info("MAPSHIFT_CHECKPOINT_DIR=%s", os.environ.get("MAPSHIFT_CHECKPOINT_DIR", "<unset>"))
+    logger.info(
+        "Study grid: samples_per_motif=%d task_samples_per_class=%d severity_levels=%s protocols=%s",
+        samples_per_motif,
+        task_samples_per_class,
+        list(study_config.severity_levels),
+        list(study_config.protocol_names),
+    )
 
+    logger.info("Copying frozen benchmark and study configs")
     copied_configs = _copy_release_configs(bundle, study_config_path, output_dir)
+    logger.info("Copied %d config artifacts", len(copied_configs))
+
+    logger.info("Building canonical split manifests and leakage report")
     split_bundle = build_canonical_release_split_bundle(
         release_bundle=bundle,
         sample_count_per_motif=samples_per_motif,
         task_samples_per_class=task_samples_per_class,
     )
     split_paths = _write_split_artifacts(split_bundle, output_dir)
-    recipe_paths = _write_recipe_artifacts(split_bundle, output_dir)
+    logger.info(
+        "Split manifests written: ok=%s fatal_leakage=%d diagnostic_warnings=%d benign=%d",
+        split_bundle.ok,
+        len(split_bundle.leakage_report.errors),
+        len(split_bundle.leakage_report.warnings),
+        len(split_bundle.leakage_report.benign),
+    )
 
+    logger.info("Writing intervention and task recipe artifacts")
+    recipe_paths = _write_recipe_artifacts(split_bundle, output_dir)
+    logger.info("Recipe artifacts written: %s", ", ".join(sorted(recipe_paths)))
+
+    logger.info("Generating benchmark health report before model results")
     health_report = generate_mapshift_2d_benchmark_health_report(
         release_bundle=bundle,
         sample_count_per_motif=samples_per_motif,
@@ -200,15 +255,40 @@ def main() -> int:
     )
     health_path = output_dir / "health" / "benchmark_health.json"
     _write_json(health_path, health_report.to_dict())
+    logger.info(
+        "Benchmark health written: %s validator_failures=%d undercovered_cells=%d",
+        health_path,
+        health_report.validator_summary["failed_intervention_count"],
+        len(health_report.task_coverage["undercovered_cells"]),
+    )
 
+    logger.info("Running MapShift-2D study; this is the long stage")
     study_bundle = run_mapshift_2d_study(study_config, release_bundle=bundle)
+    cep_records = len(study_bundle.raw_reports["cep_report"]["records"])
+    protocol_reports = study_bundle.raw_reports["protocol_comparison_report"]["protocol_reports"]
+    protocol_record_counts = {
+        name: len(report["records"])
+        for name, report in sorted(protocol_reports.items())
+    }
+    logger.info("Study complete: cep_records=%d protocol_record_counts=%s", cep_records, protocol_record_counts)
+
+    logger.info("Writing study bundle artifacts")
     study_paths = write_mapshift_2d_study_bundle(study_bundle, output_dir / "study")
+    logger.info("Study bundle written: %s", study_paths["study_bundle"])
+
+    logger.info("Copying paper-facing tables and figures")
     copied_study_paths = _copy_study_tables_and_figures(study_paths, output_dir)
+    logger.info("Copied %d paper-facing JSON artifacts", len(copied_study_paths))
+
+    logger.info("Rendering paper-ready markdown/SVG outputs")
     rendered_paper_paths = render_outputs(Path(study_paths["study_bundle"]), output_dir / "paper_outputs")
+    logger.info("Rendered %d paper outputs", len(rendered_paper_paths))
+
     readme_path = _write_artifact_readme(output_dir, bundle.root.release_name, study_config_path)
 
     artifact_paths = {
         "artifact_readme": readme_path,
+        "build_log": str(log_path),
         "configs": copied_configs,
         "splits": split_paths,
         "recipes": recipe_paths,
@@ -239,16 +319,24 @@ def main() -> int:
     )
     manifest_path = output_dir / "manifests" / "release_manifest.json"
     _write_json(manifest_path, manifest.to_dict())
+    logger.info("Release manifest written: %s", manifest_path)
 
     summary = {
         "release_name": bundle.root.release_name,
         "output_dir": str(output_dir),
         "manifest": str(manifest_path),
+        "build_log": str(log_path),
         "split_validation_ok": split_bundle.ok,
         "fatal_leakage_count": len(split_bundle.leakage_report.errors),
         "health_validator_failures": health_report.validator_summary["failed_intervention_count"],
         "study_bundle": study_paths["study_bundle"],
     }
+    logger.info(
+        "Build finished: split_validation_ok=%s fatal_leakage=%d health_validator_failures=%d",
+        summary["split_validation_ok"],
+        summary["fatal_leakage_count"],
+        summary["health_validator_failures"],
+    )
     if args.print_summary:
         print(json.dumps(summary, indent=2, sort_keys=True))
     return 0 if split_bundle.ok and health_report.validator_summary["failed_intervention_count"] == 0 else 1

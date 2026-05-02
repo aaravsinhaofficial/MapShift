@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import random
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
@@ -40,6 +41,9 @@ from mapshift.tasks.samplers import TaskSampler, TaskSamplingRejected
 from mapshift.envs.map2d.generator import Map2DGenerator
 from mapshift.envs.procthor.generator import ProcTHORGenerator
 from mapshift.envs.procthor.wrappers import ProcTHORScene
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -301,10 +305,38 @@ def run_calibration_suite(
 
     motifs = list(motif_tags or _motif_tags_for_tier(release_bundle, generator, active_tier))
     families = list(family_names or _family_names_for_tier(release_bundle, active_tier))
+    LOGGER.info(
+        "Starting calibration protocol=%s tier=%s baseline_runs=%d motifs=%d samples_per_motif=%d families=%d severity_levels=%s task_samples_per_class=%d",
+        active_protocol.name,
+        active_tier,
+        len(models),
+        len(motifs),
+        sample_count_per_motif,
+        len(families),
+        list(severity_levels),
+        task_samples_per_class,
+    )
     for motif_index, motif in enumerate(motifs):
         for sample_index in range(sample_count_per_motif):
             seed = (motif_index + 1) * 100 + sample_index
+            LOGGER.info(
+                "Protocol %s: motif %d/%d (%s), sample %d/%d, seed=%d",
+                active_protocol.name,
+                motif_index + 1,
+                len(motifs),
+                motif,
+                sample_index + 1,
+                sample_count_per_motif,
+                seed,
+            )
             base_environment = _sample_base_environment(generator, seed=seed, motif_tag=motif)
+            LOGGER.info(
+                "Protocol %s: base_environment=%s split=%s; running exploration for %d baseline runs",
+                active_protocol.name,
+                base_environment.environment_id,
+                getattr(base_environment, "split_name", ""),
+                len(models),
+            )
 
             for run_id, model in models.items():
                 explorations[(run_id, base_environment.environment_id)] = _exploration_for_protocol(
@@ -321,6 +353,12 @@ def run_calibration_suite(
             )
 
             for family in families:
+                LOGGER.info(
+                    "Protocol %s: evaluating family=%s for base_environment=%s",
+                    active_protocol.name,
+                    family,
+                    base_environment.environment_id,
+                )
                 intervention = build_intervention(family, release_bundle.interventions.families[family])
                 for severity in severity_levels:
                     sampled_environment = _environment_for_protocol(base_environment, family, severity, intervention, active_protocol, seed)
@@ -393,6 +431,7 @@ def run_calibration_suite(
                                     )
                                 )
 
+    LOGGER.info("Completed calibration protocol=%s records=%d", active_protocol.name, len(records))
     baseline_metadata = _aggregate_baseline_metadata(models, configs_by_run_id)
     run_manifest_metadata = {
         run_id: build_run_manifest(
@@ -404,6 +443,7 @@ def run_calibration_suite(
         for run_id, model in models.items()
     }
 
+    LOGGER.info("Aggregating calibration summaries protocol=%s", active_protocol.name)
     long_horizon_threshold = _long_horizon_threshold(records)
     metric_tables = _build_metric_tables(records, long_horizon_threshold=long_horizon_threshold)
     bootstrap_summary = _build_bootstrap_summary(records, release_bundle, long_horizon_threshold=long_horizon_threshold)

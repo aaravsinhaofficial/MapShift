@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Sequence
@@ -10,6 +11,9 @@ from mapshift.baselines.api import BaselineRunConfig
 from mapshift.core.schemas import ReleaseBundle
 from mapshift.metrics.ranking import kendall_tau, rank_reversals
 from mapshift.runners.evaluate import CalibrationReport, EvaluationProtocol, run_calibration_suite
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -53,7 +57,9 @@ def run_protocol_comparison_suite(
 
     protocol_reports: dict[str, CalibrationReport] = {}
     required_protocols = tuple(protocol_names or ("cep", "same_environment", "no_exploration", "short_horizon", "long_horizon"))
+    LOGGER.info("Starting protocol comparison suite protocols=%s", sorted(required_protocols))
     for protocol_name in sorted(required_protocols):
+        LOGGER.info("Running protocol comparison member=%s", protocol_name)
         protocol_reports[protocol_name] = run_calibration_suite(
             release_bundle=release_bundle,
             baseline_run_configs=baseline_run_configs,
@@ -65,6 +71,7 @@ def run_protocol_comparison_suite(
             family_names=family_names,
             tier=tier,
         )
+        LOGGER.info("Completed protocol comparison member=%s", protocol_name)
 
     pairwise = {}
     if "same_environment" in protocol_reports and "cep" in protocol_reports:
