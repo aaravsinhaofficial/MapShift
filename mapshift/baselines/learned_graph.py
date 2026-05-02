@@ -33,6 +33,24 @@ class GraphTrainingData:
     max_traversal_cost: float
     global_features: tuple[float, ...]
 
+    def to_device(self, device: torch.device | str) -> "GraphTrainingData":
+        """Return a copy with tensor fields moved to the requested Torch device."""
+
+        return GraphTrainingData(
+            node_order=self.node_order,
+            token_order=self.token_order,
+            node_features=self.node_features.to(device),
+            adjacency_matrix=self.adjacency_matrix.to(device),
+            pair_index=self.pair_index.to(device),
+            edge_labels=self.edge_labels.to(device),
+            geometry_cost_labels=self.geometry_cost_labels.to(device),
+            traversal_cost_labels=self.traversal_cost_labels.to(device),
+            token_labels=self.token_labels.to(device),
+            max_geometry_cost=self.max_geometry_cost,
+            max_traversal_cost=self.max_traversal_cost,
+            global_features=self.global_features,
+        )
+
 
 @dataclass(frozen=True)
 class BeliefRouteResult:
@@ -195,7 +213,7 @@ def edge_probability_map(
 
     probabilities = torch.sigmoid(edge_logits.detach()).cpu().tolist()
     pair_map: dict[tuple[str, str], list[float]] = {}
-    for (left_index, right_index), probability in zip(pair_index.tolist(), probabilities):
+    for (left_index, right_index), probability in zip(pair_index.detach().cpu().tolist(), probabilities):
         left_id = node_order[left_index]
         right_id = node_order[right_index]
         if left_id == right_id:
@@ -214,7 +232,7 @@ def traversal_cost_map(
 
     values = traversal_cost_predictions.detach().cpu().tolist()
     pair_map: dict[tuple[str, str], list[float]] = {}
-    for (left_index, right_index), value in zip(pair_index.tolist(), values):
+    for (left_index, right_index), value in zip(pair_index.detach().cpu().tolist(), values):
         left_id = node_order[left_index]
         right_id = node_order[right_index]
         if left_id == right_id:

@@ -4,11 +4,19 @@
   "benchmark_config": "../benchmark/release_v0_1.json",
   "baseline_run_configs": [
     "../calibration/oracle_post_intervention_planner_v0_1.json",
+    "../calibration/same_environment_upper_baseline_v0_1.json",
     "../calibration/weak_heuristic_baseline_v0_1.json",
     "../calibration/monolithic_recurrent_world_model_v0_1.json",
     "../calibration/persistent_memory_world_model_v0_1.json",
-    "../calibration/relational_graph_world_model_v0_1.json"
+    "../calibration/relational_graph_world_model_v0_1.json",
+    "../calibration/structured_dynamics_world_model_v0_1.json"
   ],
+  "model_seed_overrides": {
+    "monolithic_recurrent_world_model": [0],
+    "persistent_memory_world_model": [0],
+    "relational_graph_world_model": [0],
+    "structured_dynamics_world_model": [0]
+  },
   "sample_count_per_motif": 1,
   "task_samples_per_class": 1,
   "severity_levels": [0],

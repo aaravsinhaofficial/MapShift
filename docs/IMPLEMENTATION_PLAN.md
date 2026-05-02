@@ -506,12 +506,12 @@ Build a common API and wrappers for the planned baseline families so that compar
    - representation or memory export
    - planning or control under the post-intervention task
    - limited adaptation episodes where applicable
-2. Implement wrappers for the five planned system classes:
+2. Implement wrappers for the planned v0.1 system classes:
    - monolithic recurrent world model
    - persistent-memory world model
    - structured-dynamics world model
    - relational or graph world model
-   - reference structured model such as PRISM-X
+   - structured reference models only when fully implemented; PRISM-X is omitted from v0.1
 3. Standardize exploration budget handling across all wrappers.
 4. Standardize logging of compute, parameters, and run failures.
 5. Implement hyperparameter locking via config snapshots.

@@ -3,15 +3,15 @@
 ## 1. Document Status
 
 - Benchmark: MapShift
-- Version: `0.1-draft`
-- Status: Draft benchmark contract
-- Scope: Scientific and protocol specification
+- Version: `mapshift_2d_v0_1`
+- Status: Frozen 2D benchmark release contract
+- Scope: 2D-first scientific and protocol specification
 - Companion documents:
   - [Implementation Plan](/Users/aaravsinha/MapShift/docs/IMPLEMENTATION_PLAN.md)
   - [Evaluation Card](/Users/aaravsinha/MapShift/docs/evaluation_card.md)
   - [Release Checklist](/Users/aaravsinha/MapShift/docs/release_checklist.md)
 
-This document is the source of truth for what MapShift is intended to measure, how it should be implemented, and how results must be reported.
+This document is the source of truth for what the frozen MapShift-2D v0.1 release is intended to measure, how it is implemented, and how results must be reported. The ProcTHOR-compatible 3D files are prototype/future-work artifacts and do not carry the v0.1 scientific claim.
 
 ### Normative language
 
@@ -115,11 +115,11 @@ Every benchmark artifact MUST store:
 
 ## 7. Benchmark Structure
 
-MapShift has two tiers.
+MapShift has a frozen 2D tier and a prototype 3D tier.
 
 ### Tier 1. MapShift-2D
 
-This is the core benchmark and MUST carry the main scientific weight.
+This is the frozen v0.1 benchmark and MUST carry the main scientific weight.
 
 Properties:
 
@@ -129,16 +129,16 @@ Properties:
 - able to produce matched intervention pairs
 - able to control geometry, topology, dynamics, and semantics explicitly
 
-### Tier 2. MapShift-3D
+### Tier 2. MapShift-3D Prototype
 
-This is the external-validity tier and SHOULD be implemented on ProcTHOR.
+This is prototype/future work and is not part of the frozen v0.1 claim.
 
 Properties:
 
-- same logical evaluation protocol as MapShift-2D
-- same intervention-family vocabulary
-- same reporting hierarchy
-- substrate-specific restrictions must be documented, not hidden
+- intended to preserve the same logical evaluation protocol as MapShift-2D
+- intended to use the same intervention-family vocabulary
+- intended to use the same reporting hierarchy
+- substrate-specific restrictions must be documented before any future 3D claim
 
 ## 8. MapShift-2D Substrate Specification
 
@@ -514,7 +514,7 @@ MapShift SHOULD evaluate a small set of conceptually distinct system classes:
 - persistent-memory world model
 - structured-dynamics world model
 - relational or graph world model
-- reference structured model such as PRISM-X
+- structured reference models only if fully implemented; `prismx_reference_model` is omitted from v0.1
 
 ### Fairness requirements
 
@@ -538,6 +538,7 @@ Final benchmark reporting MUST include:
 - mean performance across environment seeds and model seeds
 - `95%` bootstrap confidence intervals
 - paired comparisons where base environments are shared
+- bootstrap units that include both environment identity and model seed
 - rank stability under bootstrap
 - severity-response analysis
 
@@ -618,16 +619,6 @@ Each public result MUST state:
 
 A result MUST NOT be called a main MapShift result if it omits family-wise reporting.
 
-## 23. Open Items Before Release Freeze
+## 23. Frozen v0.1 Values
 
-The following items remain to be frozen in canonical config files:
-
-- exact `T_exp`
-- exact test-horizon distributions
-- exact severity parameter values by family
-- canonical split sizes
-- canonical seed counts
-- canonical adaptation budgets
-- canonical baseline roster and hyperparameter search budget
-
-Until those values are frozen, this document should be treated as the benchmark contract draft rather than the final release contract.
+The frozen values are recorded in `docs/release_freeze_v0_1.md` and the canonical configs under `configs/`. They include `T_exp=800`, 96x96 maps, motif splits, severity ladders, task mix, horizons, adaptation budgets, model-seed counts, metric definitions, bootstrap settings, and the baseline roster. Any post-freeze change must be logged before it is used in a reported result.

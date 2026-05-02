@@ -2,7 +2,7 @@
 
 MapShift is a diagnostic benchmark for evaluating whether world models learned during reward-free exploration remain useful after structured environmental interventions. It introduces the **Counterfactual Embodied Planning (CEP)** evaluation protocol: an agent first explores an environment without task reward, the environment is then modified along a controlled intervention axis, and the agent must plan, infer, or adapt in the changed environment using only its previously learned world model.
 
-MapShift provides four orthogonal intervention families — **metric**, **topology**, **dynamics**, and **semantic** — each with calibrated severity ladders, enabling fine-grained diagnosis of which aspects of a world model are brittle or robust under distributional shift. The benchmark emphasizes family-wise reporting, deterministic reproducibility, and explicit provenance tracking for all generated artifacts.
+The frozen **MapShift-2D v0.1** release provides four orthogonal intervention families — **metric**, **topology**, **dynamics**, and **semantic** — each with calibrated severity ladders, enabling fine-grained diagnosis of which aspects of a world model are brittle or robust under distributional shift. The benchmark emphasizes family-wise reporting, deterministic reproducibility, and explicit provenance tracking for all generated artifacts.
 
 ## Overview
 
@@ -81,38 +81,61 @@ Train, validation, and test sets are split by **structural motif**, not by rando
 
 ### Tiers
 
-- **MapShift-2D** (primary): Procedural 2D grid environments with full intervention and evaluation support.
-- **MapShift-3D** (scaffolded): ProcTHOR-based 3D environments for external validity. Not yet functional.
+- **MapShift-2D v0.1** (primary): Frozen procedural 2D grid benchmark release with full intervention, health, evaluation, and artifact-building support.
+- **MapShift-3D** (prototype/future work): ProcTHOR-compatible files remain in the repository, but 3D is not part of the v0.1 scientific claim.
 
 ## Getting Started
 
 ### Requirements
 
 - Python ≥ 3.10
-- No third-party dependencies (pure Python standard library)
+- CPU dependencies from `pyproject.toml`: `numpy>=1.26,<3.0` and `torch>=2.2,<3.0`
 
 ### Installation
 
 ```bash
 git clone https://github.com/aaravsinhaofficial/MapShift.git
 cd MapShift
-pip install -e .
+python3 -m pip install --upgrade pip
+python3 -m pip install -e .
 ```
 
 ### Validation
 
-Validate the draft release config bundle:
+Validate the frozen 2D release config bundle:
 
 ```bash
-python3 scripts/validate_benchmark.py configs/benchmark/release_v0_1.json
+python3 scripts/validate_benchmark.py --tier mapshift_2d configs/benchmark/release_v0_1.json
 ```
 
-### Smoke Test
+### Reviewer Smoke
 
-Generate a map, apply all four interventions, and render output:
+Build a small reviewer artifact, including health checks, split manifests, a learned-baseline study, paper tables, and SVG figures:
 
 ```bash
-python3 scripts/smoke_map2d.py
+python3 scripts/build_benchmark.py --tier mapshift_2d --study-config configs/analysis/mapshift_2d_full_study_smoke_v0_1.json --output-dir outputs/releases/mapshift_2d_v0_1_smoke --print-summary
+```
+
+The smoke config is designed for CPU execution with small seeds. Runtime depends on the installed PyTorch build and host CPU.
+
+### Full Reproduction
+
+Regenerate the full v0.1 paper-facing tables and figures from frozen configs:
+
+```bash
+python3 scripts/build_benchmark.py --tier mapshift_2d --study-config configs/analysis/mapshift_2d_full_study_v0_1.json --output-dir outputs/releases/mapshift_2d_v0_1_full --print-summary
+```
+
+Learned baselines use `torch_device: "auto"` and will select CUDA when a CUDA-enabled PyTorch build reports `torch.cuda.is_available()`. To pin a GPU explicitly, set:
+
+```bash
+export MAPSHIFT_TORCH_DEVICE=cuda:0
+```
+
+To render paper tables/figures again from saved study JSON without rerunning model evaluation:
+
+```bash
+python3 scripts/render_paper_outputs.py outputs/releases/mapshift_2d_v0_1_full/study/study_bundle.json --output-dir outputs/releases/mapshift_2d_v0_1_full/paper_outputs --print-summary
 ```
 
 ### Running Tests
@@ -131,23 +154,26 @@ The benchmark is config-driven. The top-level release config (`configs/benchmark
 |--------|---------|
 | `validate_benchmark.py` | Validate release config structure and integrity |
 | `smoke_map2d.py` | Quick end-to-end smoke test |
-| `build_benchmark.py` | Full split generation and artifact creation |
+| `build_benchmark.py` | Frozen 2D release artifact builder |
 | `generate_release_splits.py` | Build train/val/test splits with leakage detection |
 | `run_eval.py` | Execute full evaluation on baselines |
 | `run_mapshift_2d_study.py` | Orchestrate a complete MapShift-2D study |
 | `run_protocol_comparison.py` | Compare CEP vs. same-environment vs. no-exploration protocols |
+| `render_paper_outputs.py` | Render Markdown tables and SVG figures from saved study JSON |
 
 ### Baselines
 
 The benchmark defines a common baseline interface (`mapshift/baselines/api.py`) with implementations for:
 
 - **Oracle planner** — has access to the true intervened environment
+- **Same-environment upper/reference** — oracle-style same-environment reference
 - **Heuristic baseline** — simple reactive policy
 - **Recurrent world model** — monolithic learned dynamics
 - **Memory world model** — explicit memory-augmented architecture
 - **Relational graph world model** — graph-structured world model
+- **Structured-dynamics world model** — factorized geometry/traversal/dynamics learned baseline
 
-Baseline configs are in `configs/calibration/`.
+Baseline configs are in `configs/calibration/`. `prismx_reference_model` is explicitly omitted from the frozen v0.1 main study because it is not implemented.
 
 ## Repository Structure
 
@@ -183,28 +209,30 @@ outputs/                           # Generated artifacts (manifests, reports, fi
 
 - **Deterministic from seed.** Every environment, intervention, and task is reproducible from a `(seed, config_hash)` pair. Seeding logic: `mapshift/core/seeding.py`.
 - **Provenance tracking.** Every generated artifact produces an `ArtifactManifest` with a unique ID, timestamp, parent references, and config hash. See `mapshift/core/manifests.py`.
-- **Zero third-party dependencies.** Pure Python standard library for maximum portability.
+- **CPU-first reproducibility.** The release uses bounded `numpy` and `torch` dependencies and runs without GPU-specific code paths.
 - **Family-wise reporting.** Metrics are always disaggregated by intervention family to avoid masking conclusions in pooled scores.
 - **Motif-based splitting.** Structural novelty in test sets, not just random seed variation.
 
 ## Documentation
 
 - [Benchmark Specification](docs/benchmark_spec.md) — Full scientific specification with formal CEP definition, intervention taxonomy, and freeze policy
+- [Release Freeze](docs/release_freeze_v0_1.md) — Frozen MapShift-2D v0.1 values and canonical reviewer commands
 - [Evaluation Card](docs/evaluation_card.md) — What MapShift measures and does not measure, supported claims, known limitations, and responsible-use guidance
 - [Implementation Plan](docs/IMPLEMENTATION_PLAN.md) — Implementation blueprint and scope
 - [Release Checklist](docs/release_checklist.md) — Pre-release validation checklist
 
 ## Project Status
 
-Version **0.1-draft**. Current state:
+Version **MapShift-2D v0.1**. Current state:
 
 - ✅ 2D environment generator with motif templates
 - ✅ All four intervention families with severity ladders
 - ✅ Task sampler for planning, inference, and adaptation
 - ✅ Config-driven pipeline from generation through evaluation
-- ✅ Validation, smoke tests, and integration tests
-- 🔧 Baselines, runners, and analysis stack are partially scaffolded
-- 🔧 3D tier (ProcTHOR) is scaffolded but not yet functional
+- ✅ Validation, benchmark health, split leakage checks, smoke tests, integration tests, and artifact builder
+- ✅ Oracle, same-environment reference, weak heuristic, recurrent, memory, relational, and structured-dynamics 2D baselines
+- ✅ Paper-facing tables/figures regenerate from saved JSON outputs
+- 🔧 3D tier remains prototype/future work and is not part of the v0.1 claim
 
 ## Citation
 

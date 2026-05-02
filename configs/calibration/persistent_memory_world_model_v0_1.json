@@ -10,6 +10,7 @@
     "readout_width": 8,
     "training_epochs": 8,
     "learning_rate": 0.01,
+    "torch_device": "auto",
     "max_rollout_steps": 8,
     "checkpoint_dir": "/tmp/mapshift_learned_baselines"
   }

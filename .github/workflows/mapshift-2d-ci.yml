@@ -1,0 +1,49 @@
+name: MapShift-2D CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  mapshift-2d:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install CPU package dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Validate frozen 2D release config
+        run: python3 scripts/validate_benchmark.py --tier mapshift_2d configs/benchmark/release_v0_1.json
+
+      - name: Run 2D environment smoke
+        run: python3 scripts/smoke_map2d.py
+
+      - name: Run unit and integration tests with torch installed
+        run: python3 -m unittest discover -s tests -p 'test_*.py'
+
+      - name: Run small learned-baseline 2D study
+        run: >
+          python3 scripts/run_mapshift_2d_study.py
+          configs/analysis/mapshift_2d_full_study_smoke_v0_1.json
+          --output-dir outputs/ci/mapshift_2d_smoke_study
+          --print-summary
+
+      - name: Build reviewer smoke artifact
+        run: >
+          python3 scripts/build_benchmark.py
+          --tier mapshift_2d
+          --study-config configs/analysis/mapshift_2d_full_study_smoke_v0_1.json
+          --output-dir outputs/ci/mapshift_2d_v0_1_smoke
+          --print-summary

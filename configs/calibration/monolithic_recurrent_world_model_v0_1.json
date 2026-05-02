@@ -9,6 +9,7 @@
     "observation_stride": 2,
     "training_epochs": 6,
     "learning_rate": 0.01,
+    "torch_device": "auto",
     "max_rollout_steps": 8,
     "checkpoint_dir": "/tmp/mapshift_learned_baselines"
   }

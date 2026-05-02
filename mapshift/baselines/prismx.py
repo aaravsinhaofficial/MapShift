@@ -1,4 +1,4 @@
-"""Reference structured model scaffold."""
+"""Unimplemented PRISM-X placeholder omitted from the frozen v0.1 main study."""
 
 from __future__ import annotations
 

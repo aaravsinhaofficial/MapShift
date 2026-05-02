@@ -1,8 +1,7 @@
-"""Shared learned graph baseline scaffold for MapShift-2D."""
+"""Shared learned graph baseline implementation for MapShift-2D."""
 
 from __future__ import annotations
 
-import copy
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
@@ -24,7 +23,7 @@ from .api import (
     summarize_exploration_memory,
 )
 from .common import dynamics_cost_multiplier, horizon_allows_path, path_efficiency_from_lengths
-from .learned_common import checkpoint_path, count_parameters, load_checkpoint, save_checkpoint, set_torch_seed
+from .learned_common import checkpoint_path, count_parameters, load_checkpoint, resolve_torch_device, save_checkpoint, set_torch_seed
 from .learned_graph import (
     GraphTrainingData,
     build_graph_training_data,
@@ -54,8 +53,16 @@ class LearnedGraphBaseline(BaseBaselineModel, ABC):
         self.validation_fraction = min(0.4, max(0.1, float(self.parameters.get("validation_fraction", 0.2))))
         self.early_stopping_patience = max(1, int(self.parameters.get("early_stopping_patience", 3)))
         self.max_probe_steps = max(1, int(self.parameters.get("max_probe_steps", 8)))
+        self.device_request = str(self.parameters.get("torch_device", self.parameters.get("device", "auto")))
+        self.torch_device = resolve_torch_device(self.device_request)
         self._model_cache: dict[str, nn.Module] = {}
         self._training_cache: dict[str, dict[str, Any]] = {}
+
+    def describe(self) -> dict[str, Any]:
+        payload = super().describe()
+        payload["torch_device_request"] = self.device_request
+        payload["torch_device_resolved"] = str(self.torch_device)
+        return payload
 
     @property
     @abstractmethod
@@ -135,7 +142,8 @@ class LearnedGraphBaseline(BaseBaselineModel, ABC):
             parameters=self.parameters,
         )
         model, training_summary = self._train_or_load_model(environment.environment_id, graph_data, checkpoint, context.seed)
-        outputs = self.forward_outputs(model, graph_data)
+        runtime_graph_data = graph_data.to_device(self.torch_device)
+        outputs = self.forward_outputs(model, runtime_graph_data)
         hidden = tuple(float(value) for value in outputs["node_hidden"].mean(dim=0).detach().cpu().tolist())
         memory = summarize_exploration_memory(environment, visited_cells, visited_node_ids)
         memory["training_summary"] = dict(training_summary)
@@ -172,13 +180,14 @@ class LearnedGraphBaseline(BaseBaselineModel, ABC):
         if environment_id in self._model_cache:
             return self._model_cache[environment_id], dict(self._training_cache[environment_id])
 
-        model = self.build_model(graph_data)
+        model = self.build_model(graph_data).to(self.torch_device)
         total_parameters, trainable_parameters = count_parameters(model)
         self.parameter_count = total_parameters
         self.trainable_parameter_count = trainable_parameters
+        runtime_graph_data = graph_data.to_device(self.torch_device)
 
         if checkpoint.is_file():
-            payload = load_checkpoint(checkpoint)
+            payload = load_checkpoint(checkpoint, map_location=self.torch_device)
             try:
                 model.load_state_dict(payload["state_dict"])
             except RuntimeError:
@@ -188,13 +197,15 @@ class LearnedGraphBaseline(BaseBaselineModel, ABC):
                 summary = dict(payload.get("training_summary", {}))
                 summary.setdefault("parameter_count", total_parameters)
                 summary.setdefault("trainable_parameter_count", trainable_parameters)
+                summary.setdefault("torch_device_request", self.device_request)
+                summary["torch_device_resolved"] = str(self.torch_device)
                 self._model_cache[environment_id] = model
                 self._training_cache[environment_id] = summary
                 return model, summary
 
         set_torch_seed(seed)
-        pair_train_mask, pair_val_mask = self._pair_split_masks(graph_data)
-        node_train_mask, node_val_mask = self._node_split_masks(graph_data)
+        pair_train_mask, pair_val_mask = self._pair_split_masks(runtime_graph_data)
+        node_train_mask, node_val_mask = self._node_split_masks(runtime_graph_data)
 
         model.train()
         optimizer = torch.optim.Adam(model.parameters(), lr=self.learning_rate)
@@ -202,16 +213,16 @@ class LearnedGraphBaseline(BaseBaselineModel, ABC):
         val_curve: list[float] = []
         best_epoch = 0
         best_val_loss = float("inf")
-        best_state = copy.deepcopy(model.state_dict())
+        best_state = self._state_dict_on_cpu(model)
         patience = 0
         last_breakdown: dict[str, float] = {}
 
         for epoch in range(self.training_epochs):
             optimizer.zero_grad()
-            outputs = self.forward_outputs(model, graph_data)
+            outputs = self.forward_outputs(model, runtime_graph_data)
             train_loss, train_breakdown = self.training_loss(
                 outputs,
-                graph_data,
+                runtime_graph_data,
                 pair_mask=pair_train_mask,
                 node_mask=node_train_mask,
             )
@@ -220,10 +231,10 @@ class LearnedGraphBaseline(BaseBaselineModel, ABC):
 
             model.eval()
             with torch.no_grad():
-                validation_outputs = self.forward_outputs(model, graph_data)
+                validation_outputs = self.forward_outputs(model, runtime_graph_data)
                 validation_loss, validation_breakdown = self.training_loss(
                     validation_outputs,
-                    graph_data,
+                    runtime_graph_data,
                     pair_mask=pair_val_mask,
                     node_mask=node_val_mask,
                 )
@@ -238,7 +249,7 @@ class LearnedGraphBaseline(BaseBaselineModel, ABC):
             if validation_loss.item() + 1e-8 < best_val_loss:
                 best_val_loss = float(validation_loss.item())
                 best_epoch = epoch + 1
-                best_state = copy.deepcopy(model.state_dict())
+                best_state = self._state_dict_on_cpu(model)
                 patience = 0
             else:
                 patience += 1
@@ -260,15 +271,22 @@ class LearnedGraphBaseline(BaseBaselineModel, ABC):
             "checkpoint_path": str(checkpoint),
             "parameter_count": total_parameters,
             "trainable_parameter_count": trainable_parameters,
+            "torch_device_request": self.device_request,
+            "torch_device_resolved": str(self.torch_device),
+            "cuda_available": torch.cuda.is_available(),
+            "cuda_device_name": torch.cuda.get_device_name(self.torch_device) if self.torch_device.type == "cuda" else "",
         }
-        save_checkpoint(checkpoint, {"state_dict": model.state_dict(), "training_summary": summary})
+        save_checkpoint(checkpoint, {"state_dict": self._state_dict_on_cpu(model), "training_summary": summary})
         self._model_cache[environment_id] = model
         self._training_cache[environment_id] = summary
         return model, summary
 
+    def _state_dict_on_cpu(self, model: nn.Module) -> dict[str, torch.Tensor]:
+        return {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
+
     def _pair_split_masks(self, graph_data: GraphTrainingData) -> tuple[torch.Tensor, torch.Tensor]:
         pair_count = int(graph_data.pair_index.shape[0])
-        mask = torch.ones(pair_count, dtype=torch.bool)
+        mask = torch.ones(pair_count, dtype=torch.bool, device=graph_data.pair_index.device)
         if pair_count >= 5:
             for index in range(pair_count):
                 if index % max(2, int(round(1 / self.validation_fraction))) == 0:
@@ -283,7 +301,7 @@ class LearnedGraphBaseline(BaseBaselineModel, ABC):
 
     def _node_split_masks(self, graph_data: GraphTrainingData) -> tuple[torch.Tensor, torch.Tensor]:
         node_count = int(graph_data.node_features.shape[0])
-        mask = torch.ones(node_count, dtype=torch.bool)
+        mask = torch.ones(node_count, dtype=torch.bool, device=graph_data.node_features.device)
         if node_count >= 4:
             for index in range(node_count):
                 if index % max(2, int(round(1 / self.validation_fraction))) == 0:
@@ -310,7 +328,7 @@ class LearnedGraphBaseline(BaseBaselineModel, ABC):
         if model is None:
             raise ValueError(f"No cached model found for {exploration.environment_id}")
         base_environment = self._base_environment(exploration)
-        graph_data = build_graph_training_data(base_environment, tuple(exploration.visited_node_ids))
+        graph_data = build_graph_training_data(base_environment, tuple(exploration.visited_node_ids)).to_device(self.torch_device)
         outputs = self.forward_outputs(model, graph_data)
         return base_environment, graph_data, outputs
 

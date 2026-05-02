@@ -1,12 +1,12 @@
 {
   "schema_version": "0.1.0",
-  "run_name": "relational_graph_world_model_mapshift_2d_v0_1",
-  "baseline_name": "relational_graph_world_model",
+  "run_name": "structured_dynamics_world_model_mapshift_2d_v0_1",
+  "baseline_name": "structured_dynamics_world_model",
   "seed": 0,
   "exploration_budget_steps": 800,
   "parameters": {
-    "hidden_size": 10,
-    "message_passing_steps": 2,
+    "geometry_width": 10,
+    "dynamics_width": 6,
     "training_epochs": 10,
     "learning_rate": 0.01,
     "torch_device": "auto",

@@ -125,7 +125,7 @@ class BaseIntervention:
         return InterventionManifest(
             artifact_id=f"intervention-{transformed_environment.environment_id}",
             artifact_type="intervention",
-            benchmark_version="0.1-draft",
+            benchmark_version="0.1.0",
             code_version="occupancy-grid-v1",
             config_hash=self._config_hash(),
             parent_ids=[environment.environment_id],

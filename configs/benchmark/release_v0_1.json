@@ -1,9 +1,9 @@
 {
   "schema_version": "0.1.0",
   "benchmark_name": "MapShift",
-  "benchmark_version": "0.1-draft",
-  "release_name": "mapshift_release_v0_1",
-  "status": "draft",
+  "benchmark_version": "0.1.0",
+  "release_name": "mapshift_2d_v0_1",
+  "status": "frozen_2d_release",
   "primary_tier": "mapshift_2d",
   "supported_tiers": [
     "mapshift_2d",
@@ -43,6 +43,7 @@
       "hyperparameter_policy",
       "seed_counts",
       "bootstrap_procedure",
+      "environment_model_seed_bootstrap_units",
       "figure_templates",
       "table_templates"
     ]

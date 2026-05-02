@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
+from mapshift.baselines.api import BaselineRunConfig
 from mapshift.core.schemas import ReleaseBundle
 from mapshift.metrics.ranking import kendall_tau, rank_reversals
 from mapshift.runners.evaluate import CalibrationReport, EvaluationProtocol, run_calibration_suite
@@ -38,7 +39,7 @@ DEFAULT_PROTOCOLS = {
 
 def run_protocol_comparison_suite(
     release_bundle: ReleaseBundle,
-    baseline_run_configs: Sequence[str | Path],
+    baseline_run_configs: Sequence[BaselineRunConfig | str | Path],
     *,
     sample_count_per_motif: int = 1,
     task_samples_per_class: int = 1,

@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import importlib.util
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from mapshift.baselines import instantiate_baseline, load_baseline_run_config
-from mapshift.baselines.api import BaselineContext
+from mapshift.baselines.api import BaselineContext, BaselineRunConfig
+from mapshift.baselines.learned_common import resolve_torch_device
 from mapshift.core.schemas import load_release_bundle
 from mapshift.envs.map2d.dynamics import DynamicsParameters2D
 from mapshift.envs.map2d.generator import Map2DGenerator
@@ -24,6 +26,7 @@ HEURISTIC_CONFIG = REPO_ROOT / "configs" / "calibration" / "weak_heuristic_basel
 RECURRENT_CONFIG = REPO_ROOT / "configs" / "calibration" / "monolithic_recurrent_world_model_v0_1.json"
 MEMORY_CONFIG = REPO_ROOT / "configs" / "calibration" / "persistent_memory_world_model_v0_1.json"
 RELATIONAL_CONFIG = REPO_ROOT / "configs" / "calibration" / "relational_graph_world_model_v0_1.json"
+STRUCTURED_CONFIG = REPO_ROOT / "configs" / "calibration" / "structured_dynamics_world_model_v0_1.json"
 TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 
 
@@ -106,6 +109,10 @@ def unreachable_environment() -> Map2DEnvironment:
 
 
 class CalibrationBaselineTests(unittest.TestCase):
+    def test_torch_device_auto_can_be_overridden_for_aws_runs(self) -> None:
+        with patch.dict("os.environ", {"MAPSHIFT_TORCH_DEVICE": "cpu"}):
+            self.assertEqual(str(resolve_torch_device("auto")), "cpu")
+
     def test_oracle_shortest_path_matches_handcrafted_distance(self) -> None:
         environment = corridor_environment()
         config = load_baseline_run_config(ORACLE_CONFIG)
@@ -195,6 +202,7 @@ class CalibrationBaselineTests(unittest.TestCase):
         self.assertEqual(model.parameter_count, model.trainable_parameter_count)
         self.assertTrue(model.describe()["learnable"])
         self.assertEqual(model.describe()["parameters"]["hidden_size"], 12)
+        self.assertIn(model.describe()["torch_device_resolved"], {"cpu", "cuda:0"})
 
     @unittest.skipUnless(TORCH_AVAILABLE, "torch is required for learned baseline tests")
     def test_memory_wrapper_is_config_driven_and_tracks_parameters(self) -> None:
@@ -219,6 +227,18 @@ class CalibrationBaselineTests(unittest.TestCase):
         self.assertEqual(model.describe()["parameters"]["message_passing_steps"], 2)
 
     @unittest.skipUnless(TORCH_AVAILABLE, "torch is required for learned baseline tests")
+    def test_structured_dynamics_wrapper_is_config_driven_and_tracks_parameters(self) -> None:
+        config = load_baseline_run_config(STRUCTURED_CONFIG)
+        model = instantiate_baseline(config)
+
+        self.assertEqual(model.name, "structured_dynamics_world_model")
+        self.assertGreater(model.parameter_count, 0)
+        self.assertEqual(model.parameter_count, model.trainable_parameter_count)
+        self.assertTrue(model.describe()["learnable"])
+        self.assertEqual(model.describe()["parameters"]["geometry_width"], 10)
+        self.assertIn(model.describe()["torch_device_resolved"], {"cpu", "cuda:0"})
+
+    @unittest.skipUnless(TORCH_AVAILABLE, "torch is required for learned baseline tests")
     def test_exploration_trains_recurrent_world_model(self) -> None:
         bundle = load_release_bundle(ROOT_CONFIG)
         generator = Map2DGenerator(bundle.env2d)
@@ -232,6 +252,7 @@ class CalibrationBaselineTests(unittest.TestCase):
         self.assertIn("training_summary", exploration.memory)
         self.assertGreaterEqual(exploration.memory["training_summary"]["training_epochs"], 1)
         self.assertIn("checkpoint_path", exploration.memory["training_summary"])
+        self.assertIn("torch_device_resolved", exploration.memory["training_summary"])
 
     @unittest.skipUnless(TORCH_AVAILABLE, "torch is required for learned baseline tests")
     def test_relational_baseline_detects_topology_change(self) -> None:
@@ -303,6 +324,40 @@ class CalibrationBaselineTests(unittest.TestCase):
         self.assertIn("monolithic_recurrent_world_model", report.baseline_metadata)
         self.assertIn("persistent_memory_world_model", report.baseline_metadata)
         self.assertIn("relational_graph_world_model", report.baseline_metadata)
+
+    def test_calibration_suite_preserves_multiple_model_seed_runs(self) -> None:
+        bundle = load_release_bundle(ROOT_CONFIG)
+        weak_seed_0 = BaselineRunConfig(
+            schema_version="0.1.0",
+            run_name="weak_seed_0",
+            baseline_name="weak_heuristic_baseline",
+            seed=0,
+            exploration_budget_steps=800,
+            parameters={},
+        )
+        weak_seed_1 = BaselineRunConfig(
+            schema_version="0.1.0",
+            run_name="weak_seed_1",
+            baseline_name="weak_heuristic_baseline",
+            seed=1,
+            exploration_budget_steps=800,
+            parameters={},
+        )
+        report = run_calibration_suite(
+            release_bundle=bundle,
+            baseline_run_configs=[ORACLE_CONFIG, weak_seed_0, weak_seed_1],
+            sample_count_per_motif=1,
+            task_samples_per_class=1,
+            severity_levels=(0,),
+            motif_tags=["simple_loop"],
+            family_names=["metric"],
+        )
+
+        weak_records = [record for record in report.records if record.baseline_name == "weak_heuristic_baseline"]
+        self.assertEqual({record.baseline_run_id for record in weak_records}, {"weak_seed_0", "weak_seed_1"})
+        self.assertEqual({record.model_seed for record in weak_records}, {0, 1})
+        self.assertTrue(all("|weak_seed_" in record.environment_model_seed_id for record in weak_records))
+        self.assertEqual(report.baseline_metadata["weak_heuristic_baseline"]["run_count"], 2)
 
 
 if __name__ == "__main__":

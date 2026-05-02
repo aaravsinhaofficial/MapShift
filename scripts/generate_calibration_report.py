@@ -24,10 +24,12 @@ def _default_run_configs_for_tier(tier: str) -> list[str]:
         ]
     return [
         "configs/calibration/oracle_post_intervention_planner_v0_1.json",
+        "configs/calibration/same_environment_upper_baseline_v0_1.json",
         "configs/calibration/weak_heuristic_baseline_v0_1.json",
         "configs/calibration/monolithic_recurrent_world_model_v0_1.json",
         "configs/calibration/persistent_memory_world_model_v0_1.json",
         "configs/calibration/relational_graph_world_model_v0_1.json",
+        "configs/calibration/structured_dynamics_world_model_v0_1.json",
     ]
 
 

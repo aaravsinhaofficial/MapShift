@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-MapShift is a benchmark and evaluation protocol for Counterfactual Embodied Planning (CEP).
+MapShift-2D v0.1 is a frozen benchmark and evaluation protocol for Counterfactual Embodied Planning (CEP).
 
 It evaluates whether an agent can:
 
@@ -15,11 +15,12 @@ MapShift is intended as an evaluation artifact, not as a claim that a particular
 ## 2. Artifact Summary
 
 - Name: MapShift
+- Release: `mapshift_2d_v0_1`
 - Artifact type: benchmark and evaluation protocol
 - Primary domain: embodied planning and world-model evaluation
 - Benchmark tiers:
-  - MapShift-2D
-  - MapShift-3D on ProcTHOR
+  - MapShift-2D v0.1, frozen primary release
+  - MapShift-3D on ProcTHOR, prototype/future work only
 - Intervention families:
   - metric
   - topology
@@ -73,10 +74,10 @@ The benchmark measures performance after the agent has to use or revise what it 
 
 ### Environments
 
-MapShift contains:
+MapShift-2D v0.1 contains:
 
 - a 2D procedural environment tier for control and statistical power
-- a 3D ProcTHOR tier for external validity
+- prototype ProcTHOR-compatible 3D files that are not part of the v0.1 claim
 
 ### Intervention families
 
@@ -153,7 +154,7 @@ MapShift depends on the following assumptions:
 ## 12. Known Limitations
 
 - The 2D tier trades realism for control.
-- The 3D tier inherits limitations from the underlying simulator.
+- The 3D tier is prototype/future work and should not be cited as v0.1 evidence.
 - Semantic shifts are benchmark-defined and not equivalent to open-world semantics.
 - Family isolation is an engineering target, not a metaphysical guarantee.
 - Benchmark conclusions depend on the chosen exploration budget, horizon distribution, and task mix.

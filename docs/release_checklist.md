@@ -131,15 +131,16 @@ This checklist should be reviewed before:
 
 ## 9. Baseline Readiness
 
-- [ ] baseline API is documented
-- [ ] monolithic recurrent baseline wrapper exists
-- [ ] persistent-memory baseline wrapper exists
-- [ ] structured-dynamics baseline wrapper exists
-- [ ] relational or graph baseline wrapper exists
-- [ ] reference structured baseline wrapper exists or is intentionally omitted with explanation
-- [ ] oracle baseline exists
-- [ ] weak heuristic baseline exists
-- [ ] fairness policy is documented
+- [x] baseline API is documented
+- [x] monolithic recurrent baseline wrapper exists
+- [x] persistent-memory baseline wrapper exists
+- [x] structured-dynamics baseline wrapper exists
+- [x] relational or graph baseline wrapper exists
+- [x] reference structured baseline is intentionally omitted with explanation
+- [x] oracle baseline exists
+- [x] same-environment upper/reference baseline exists
+- [x] weak heuristic baseline exists
+- [x] fairness policy is documented
 
 ## 10. Main Experimental Readiness
 
@@ -171,13 +172,11 @@ This checklist should be reviewed before:
 - [ ] failure taxonomy definitions are documented
 - [ ] taxonomy outputs can be exported with run IDs and environment IDs
 
-## 11. 3D Tier Readiness
+## 11. 3D Tier Prototype Status
 
-- [ ] ProcTHOR integration is documented
-- [ ] 3D scene generation or sampling is reproducible
-- [ ] 3D intervention families are implemented or deviations are documented
-- [ ] 3D task classes are implemented or deviations are documented
-- [ ] 3D reporting uses the same family-wise hierarchy
+- [x] ProcTHOR-compatible files are documented as prototype/future work
+- [x] 3D is excluded from the frozen v0.1 scientific claim
+- [ ] future 3D scene generation, interventions, tasks, and reporting require a separate release claim
 
 ## 12. Mechanistic Analysis Readiness
 

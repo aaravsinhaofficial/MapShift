@@ -81,7 +81,7 @@ class TaskSampler:
             manifest = TaskManifest(
                 artifact_id=f"task-{intervened_environment.environment_id}-{selected_class}-{seed}",
                 artifact_type="task",
-                benchmark_version="0.1-draft",
+                benchmark_version="0.1.0",
                 code_version="occupancy-grid-v1",
                 config_hash=_config_hash(self.config),
                 parent_ids=[base_environment.environment_id, intervened_environment.environment_id],

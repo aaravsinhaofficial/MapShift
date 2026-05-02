@@ -4,12 +4,36 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import random
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
+
+
+def resolve_torch_device(requested: str | None = None) -> torch.device:
+    """Resolve a learned-baseline device request into a concrete Torch device."""
+
+    env_value = os.environ.get("MAPSHIFT_TORCH_DEVICE")
+    raw_value = env_value if env_value and str(requested or "auto").strip().lower() in {"", "auto"} else requested or "auto"
+    value = str(raw_value).strip().lower()
+    if value in {"", "auto"}:
+        return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    if value == "gpu":
+        value = "cuda:0"
+    if value == "cuda":
+        value = "cuda:0"
+    if value.startswith("cuda") and not torch.cuda.is_available():
+        raise RuntimeError(
+            f"Requested torch_device={raw_value!r}, but torch.cuda.is_available() is false. "
+            "Use torch_device='cpu' or install a CUDA-enabled PyTorch build."
+        )
+    device = torch.device(value)
+    if device.type not in {"cpu", "cuda"}:
+        raise ValueError(f"Unsupported torch_device={raw_value!r}; expected 'auto', 'cpu', 'cuda', or 'cuda:N'.")
+    return device
 
 
 def set_torch_seed(seed: int) -> None:
@@ -47,10 +71,10 @@ def save_checkpoint(path: str | Path, payload: dict[str, Any]) -> None:
     torch.save(payload, target)
 
 
-def load_checkpoint(path: str | Path) -> dict[str, Any]:
+def load_checkpoint(path: str | Path, map_location: str | torch.device = "cpu") -> dict[str, Any]:
     """Load one Torch checkpoint payload."""
 
-    return torch.load(Path(path), map_location="cpu", weights_only=False)
+    return torch.load(Path(path), map_location=map_location, weights_only=False)
 
 
 def count_parameters(model: torch.nn.Module) -> tuple[int, int]:

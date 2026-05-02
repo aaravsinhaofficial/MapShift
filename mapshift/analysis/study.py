@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
@@ -17,6 +17,7 @@ from mapshift.analysis.figures import (
 from mapshift.core.manifests import StudyManifest
 from mapshift.core.schemas import ReleaseBundle, load_release_bundle
 from mapshift.metrics.statistics import correlation_matrix, mean_or_zero
+from mapshift.baselines.api import BaselineRunConfig, load_baseline_run_config
 from mapshift.runners.compare_protocols import run_protocol_comparison_suite
 from mapshift.runners.evaluate import default_post_intervention_protocol, run_calibration_suite
 
@@ -33,6 +34,7 @@ class MapShift2DStudyConfig:
     task_samples_per_class: int
     severity_levels: tuple[int, ...]
     protocol_names: tuple[str, ...]
+    model_seed_overrides: dict[str, tuple[int, ...]] = field(default_factory=dict)
     min_cell_coverage: int = 1
     motif_tags: tuple[str, ...] = ()
     family_names: tuple[str, ...] = ()
@@ -92,6 +94,10 @@ def load_mapshift_2d_study_config(path: str | Path) -> MapShift2DStudyConfig:
         task_samples_per_class=int(payload.get("task_samples_per_class", 1)),
         severity_levels=tuple(int(level) for level in payload.get("severity_levels", [0, 1, 2, 3])),
         protocol_names=tuple(str(name) for name in payload.get("protocol_names", ("cep", "same_environment", "no_exploration", "short_horizon", "long_horizon"))),
+        model_seed_overrides={
+            str(name): tuple(int(seed) for seed in seeds)
+            for name, seeds in dict(payload.get("model_seed_overrides", {})).items()
+        },
         min_cell_coverage=int(payload.get("min_cell_coverage", 1)),
         motif_tags=tuple(str(tag) for tag in payload.get("motif_tags", [])),
         family_names=tuple(str(name) for name in payload.get("family_names", [])),
@@ -107,9 +113,10 @@ def run_mapshift_2d_study(
     """Run the first full 2D MapShift study using the frozen study config."""
 
     bundle = release_bundle or load_release_bundle(study_config.benchmark_config)
+    baseline_run_configs = _expanded_baseline_run_configs(study_config)
     cep_report = run_calibration_suite(
         release_bundle=bundle,
-        baseline_run_configs=study_config.baseline_run_configs,
+        baseline_run_configs=baseline_run_configs,
         sample_count_per_motif=study_config.sample_count_per_motif,
         task_samples_per_class=study_config.task_samples_per_class,
         severity_levels=study_config.severity_levels,
@@ -119,7 +126,7 @@ def run_mapshift_2d_study(
     )
     protocol_report = run_protocol_comparison_suite(
         release_bundle=bundle,
-        baseline_run_configs=study_config.baseline_run_configs,
+        baseline_run_configs=baseline_run_configs,
         sample_count_per_motif=study_config.sample_count_per_motif,
         task_samples_per_class=study_config.task_samples_per_class,
         severity_levels=study_config.severity_levels,
@@ -142,6 +149,20 @@ def run_mapshift_2d_study(
         protocol_report_payload=protocol_report.to_dict(),
         benchmark_health_payload=benchmark_health.to_dict(),
     )
+
+
+def _expanded_baseline_run_configs(study_config: MapShift2DStudyConfig) -> tuple[BaselineRunConfig, ...]:
+    """Expand one baseline config per requested model seed while preserving run names."""
+
+    expanded: list[BaselineRunConfig] = []
+    for path in study_config.baseline_run_configs:
+        config = load_baseline_run_config(path)
+        seeds = study_config.model_seed_overrides.get(config.baseline_name, (config.seed,))
+        for seed in seeds:
+            suffix = f"seed{seed}"
+            run_name = config.run_name if len(seeds) == 1 and config.seed == seed else f"{config.run_name}_{suffix}"
+            expanded.append(replace(config, seed=int(seed), run_name=run_name))
+    return tuple(expanded)
 
 
 def build_mapshift_2d_study_bundle(

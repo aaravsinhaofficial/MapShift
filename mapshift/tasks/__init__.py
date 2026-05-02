@@ -1,4 +1,4 @@
-"""Task scaffolds for MapShift."""
+"""Task containers and samplers for MapShift."""
 
 from .adaptation import AdaptationTask
 from .inference import InferenceTask

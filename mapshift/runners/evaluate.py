@@ -55,6 +55,8 @@ class EvaluationProtocol:
 @dataclass(frozen=True)
 class EvaluationRecord:
     baseline_name: str
+    baseline_run_id: str
+    run_name: str
     protocol_name: str
     family: str
     severity: int
@@ -66,6 +68,7 @@ class EvaluationRecord:
     base_environment_id: str
     task_id: str
     model_seed: int
+    environment_model_seed_id: str
     task_horizon_steps: int
     success: bool
     solvable: bool
@@ -157,6 +160,53 @@ def load_run_configs(paths: Sequence[str | Path]) -> list[BaselineRunConfig]:
     return [load_baseline_run_config(path) for path in paths]
 
 
+def _run_ids_for_configs(run_configs: Sequence[BaselineRunConfig]) -> list[str]:
+    """Return stable unique run ids, preserving configured run names when possible."""
+
+    seen: dict[str, int] = {}
+    run_ids: list[str] = []
+    for index, config in enumerate(run_configs):
+        base = config.run_name.strip() or f"{config.baseline_name}_seed{config.seed}"
+        count = seen.get(base, 0)
+        seen[base] = count + 1
+        run_ids.append(base if count == 0 else f"{base}_{index}")
+    return run_ids
+
+
+def _aggregate_baseline_metadata(
+    models: dict[str, Any],
+    configs_by_run_id: dict[str, BaselineRunConfig],
+) -> dict[str, dict[str, Any]]:
+    """Summarize run-level model metadata under each scientific baseline name."""
+
+    grouped: dict[str, list[tuple[str, Any, BaselineRunConfig]]] = {}
+    for run_id, model in sorted(models.items()):
+        config = configs_by_run_id[run_id]
+        grouped.setdefault(config.baseline_name, []).append((run_id, model, config))
+
+    metadata: dict[str, dict[str, Any]] = {}
+    for baseline_name, runs in sorted(grouped.items()):
+        run_payloads = {
+            run_id: model.describe() | {"run_name": run_id, "seed": config.seed}
+            for run_id, model, config in runs
+        }
+        first_model = runs[0][1]
+        parameter_counts = [int(payload.get("parameter_count", 0)) for payload in run_payloads.values()]
+        trainable_counts = [int(payload.get("trainable_parameter_count", 0)) for payload in run_payloads.values()]
+        metadata[baseline_name] = first_model.describe() | {
+            "name": baseline_name,
+            "run_count": len(runs),
+            "run_names": sorted(run_payloads),
+            "seeds": sorted({config.seed for _run_id, _model, config in runs}),
+            "runs": run_payloads,
+            "parameter_count_min": min(parameter_counts) if parameter_counts else 0,
+            "parameter_count_max": max(parameter_counts) if parameter_counts else 0,
+            "trainable_parameter_count_min": min(trainable_counts) if trainable_counts else 0,
+            "trainable_parameter_count_max": max(trainable_counts) if trainable_counts else 0,
+        }
+    return metadata
+
+
 def run_calibration_suite(
     release_bundle: ReleaseBundle,
     baseline_run_configs: Sequence[BaselineRunConfig | str | Path],
@@ -184,20 +234,36 @@ def run_calibration_suite(
     )
     if unsupported_configs:
         raise ValueError(f"Baselines do not support tier {active_tier}: {', '.join(unsupported_configs)}")
-    models = {config.baseline_name: instantiate_baseline(config) for config in run_configs}
+    run_ids = _run_ids_for_configs(run_configs)
+    models = {
+        run_id: instantiate_baseline(config)
+        for run_id, config in zip(run_ids, run_configs)
+    }
     run_contexts = {
-        config.baseline_name: BaselineContext(
+        run_id: BaselineContext(
             model_name=config.baseline_name,
             exploration_budget_steps=config.exploration_budget_steps,
             seed=config.seed,
+            run_name=run_id,
             release_name=release_bundle.root.release_name,
+            benchmark_version=release_bundle.root.benchmark_version,
             tier=active_tier,
             protocol_name=active_protocol.name,
         )
-        for config in run_configs
+        for run_id, config in zip(run_ids, run_configs)
     }
+    configs_by_run_id = dict(zip(run_ids, run_configs))
 
-    oracle_config = next((config for config in run_configs if config.baseline_name == "oracle_post_intervention_planner"), None)
+    oracle_pair = next(
+        (
+            (run_id, config)
+            for run_id, config in configs_by_run_id.items()
+            if config.baseline_name == "oracle_post_intervention_planner"
+        ),
+        None,
+    )
+    oracle_run_id = oracle_pair[0] if oracle_pair is not None else ""
+    oracle_config = oracle_pair[1] if oracle_pair is not None else None
     if oracle_config is None:
         oracle_config = BaselineRunConfig(
             schema_version="0.1.0",
@@ -207,18 +273,22 @@ def run_calibration_suite(
             exploration_budget_steps=_tier_exploration_budget(release_bundle, active_tier),
             parameters={},
         )
-    if oracle_config.baseline_name not in models:
-        models[oracle_config.baseline_name] = instantiate_baseline(oracle_config)
-        run_contexts[oracle_config.baseline_name] = BaselineContext(
+        oracle_run_id = oracle_config.run_name
+    if oracle_run_id not in models:
+        models[oracle_run_id] = instantiate_baseline(oracle_config)
+        configs_by_run_id[oracle_run_id] = oracle_config
+        run_contexts[oracle_run_id] = BaselineContext(
             model_name=oracle_config.baseline_name,
             exploration_budget_steps=oracle_config.exploration_budget_steps,
             seed=oracle_config.seed,
+            run_name=oracle_run_id,
             release_name=release_bundle.root.release_name,
+            benchmark_version=release_bundle.root.benchmark_version,
             tier=active_tier,
             protocol_name=active_protocol.name,
         )
-    oracle_model = models[oracle_config.baseline_name]
-    oracle_context = run_contexts[oracle_config.baseline_name]
+    oracle_model = models[oracle_run_id]
+    oracle_context = run_contexts[oracle_run_id]
 
     if active_tier not in getattr(oracle_model, "supported_tiers", supported_tiers_for_baseline_name(oracle_config.baseline_name)):
         raise ValueError(f"Oracle baseline does not support tier {active_tier}")
@@ -236,11 +306,11 @@ def run_calibration_suite(
             seed = (motif_index + 1) * 100 + sample_index
             base_environment = _sample_base_environment(generator, seed=seed, motif_tag=motif)
 
-            for model_name, model in models.items():
-                explorations[(model_name, base_environment.environment_id)] = _exploration_for_protocol(
+            for run_id, model in models.items():
+                explorations[(run_id, base_environment.environment_id)] = _exploration_for_protocol(
                     model,
                     base_environment,
-                    run_contexts[model_name],
+                    run_contexts[run_id],
                     active_protocol,
                 )
             oracle_explorations[base_environment.environment_id] = _exploration_for_protocol(
@@ -279,17 +349,20 @@ def run_calibration_suite(
                                 oracle_explorations[base_environment.environment_id],
                                 oracle_context,
                             )
-                            for model_name, model in models.items():
+                            for run_id, model in models.items():
+                                run_context = run_contexts[run_id]
                                 result = run_evaluation(
                                     model,
                                     evaluation_environment,
                                     evaluation_task,
-                                    explorations[(model_name, base_environment.environment_id)],
-                                    run_contexts[model_name],
+                                    explorations[(run_id, base_environment.environment_id)],
+                                    run_context,
                                 )
                                 records.append(
                                     EvaluationRecord(
-                                        baseline_name=model_name,
+                                        baseline_name=model.name,
+                                        baseline_run_id=run_id,
+                                        run_name=run_id,
                                         protocol_name=active_protocol.name,
                                         family=family,
                                         severity=severity,
@@ -300,7 +373,8 @@ def run_calibration_suite(
                                         environment_id=evaluation_environment.environment_id,
                                         base_environment_id=base_environment.environment_id,
                                         task_id=sampled.manifest.task_id,
-                                        model_seed=run_contexts[model_name].seed,
+                                        model_seed=run_context.seed,
+                                        environment_model_seed_id=f"{base_environment.environment_id}|{run_id}",
                                         task_horizon_steps=_task_horizon(evaluation_task),
                                         success=result.success,
                                         solvable=result.solvable,
@@ -319,15 +393,15 @@ def run_calibration_suite(
                                     )
                                 )
 
-    baseline_metadata = {name: model.describe() for name, model in models.items()}
+    baseline_metadata = _aggregate_baseline_metadata(models, configs_by_run_id)
     run_manifest_metadata = {
-        name: build_run_manifest(
+        run_id: build_run_manifest(
             model=model,
-            context=run_contexts[name],
-            environment_ids=sorted({record.environment_id for record in records if record.baseline_name == name}),
+            context=run_contexts[run_id],
+            environment_ids=sorted({record.environment_id for record in records if record.baseline_run_id == run_id}),
             baseline_family=model.category,
         ).to_dict()
-        for name, model in models.items()
+        for run_id, model in models.items()
     }
 
     long_horizon_threshold = _long_horizon_threshold(records)
@@ -605,7 +679,7 @@ def _build_bootstrap_summary(records: Sequence[EvaluationRecord], release_bundle
             for row in bootstrap_grouped_metric(
                 records,
                 group_fields=("protocol_name", "baseline_name", "family"),
-                unit_field=bootstrap_config.paired_by,
+                unit_field=_bootstrap_unit_field(bootstrap_config.paired_by),
                 metric_name=metric_name,
                 statistic=statistic,
                 resamples=bootstrap_config.resamples,
@@ -618,7 +692,7 @@ def _build_bootstrap_summary(records: Sequence[EvaluationRecord], release_bundle
             for row in bootstrap_grouped_metric(
                 records,
                 group_fields=("protocol_name", "baseline_name", "family", "severity"),
-                unit_field=bootstrap_config.paired_by,
+                unit_field=_bootstrap_unit_field(bootstrap_config.paired_by),
                 metric_name=metric_name,
                 statistic=statistic,
                 resamples=bootstrap_config.resamples,
@@ -630,7 +704,7 @@ def _build_bootstrap_summary(records: Sequence[EvaluationRecord], release_bundle
         "config": {
             "resamples": bootstrap_config.resamples,
             "confidence_level": bootstrap_config.confidence_level,
-            "paired_by": bootstrap_config.paired_by,
+            "paired_by": _bootstrap_unit_field(bootstrap_config.paired_by),
         },
         "familywise_main_results": main_rows,
         "severity_response": severity_rows,
@@ -760,7 +834,7 @@ def _bootstrap_rank_orders(
     filtered = [record for record in records if record.protocol_name == protocol_name and (family is None or record.family == family)]
     grouped: dict[str, list[EvaluationRecord]] = {}
     for record in filtered:
-        grouped.setdefault(record.base_environment_id, []).append(record)
+        grouped.setdefault(record.environment_model_seed_id, []).append(record)
     unit_ids = sorted(grouped)
     if not unit_ids:
         return []
@@ -776,6 +850,12 @@ def _bootstrap_rank_orders(
             scores = _scores_for_family(sample, family=family, long_horizon_threshold=long_horizon_threshold)
         orders.append(rank_by_metric(scores))
     return orders
+
+
+def _bootstrap_unit_field(configured_field: str) -> str:
+    if configured_field in {"base_environment_id", "environment_model_seed_id"}:
+        return "environment_model_seed_id"
+    return configured_field
 
 
 def _scores_for_family(records: Sequence[EvaluationRecord], *, family: str, long_horizon_threshold: int) -> dict[str, float]:

@@ -1,4 +1,4 @@
-"""Batch execution scaffold."""
+"""Batch execution containers."""
 
 from __future__ import annotations
 

@@ -22,11 +22,13 @@ _KNOWN_BASELINE_TIERS: dict[str, tuple[str, ...]] = {
     "monolithic_recurrent_world_model": ("mapshift_2d",),
     "persistent_memory_world_model": ("mapshift_2d",),
     "relational_graph_world_model": ("mapshift_2d",),
+    "structured_dynamics_world_model": ("mapshift_2d",),
 }
 _TORCH_OPTIONAL_BASELINES = {
     "monolithic_recurrent_world_model",
     "persistent_memory_world_model",
     "relational_graph_world_model",
+    "structured_dynamics_world_model",
 }
 
 
@@ -49,7 +51,9 @@ class BaselineContext:
     model_name: str
     exploration_budget_steps: int
     seed: int
+    run_name: str = ""
     release_name: str = ""
+    benchmark_version: str = "0.1.0"
     split_name: str = ""
     tier: str = "mapshift_2d"
     protocol_name: str = "post_intervention"
@@ -180,7 +184,7 @@ def _ensure_builtin_registrations() -> None:
 
     from . import heuristic, oracle  # noqa: F401
 
-    for module_name in ("memory", "recurrent", "relational"):
+    for module_name in ("memory", "recurrent", "relational", "structured_dynamics"):
         try:
             __import__(f"{__package__}.{module_name}", fromlist=[module_name])
         except ModuleNotFoundError as exc:
@@ -242,17 +246,17 @@ def build_run_manifest(
     """Build a simple run manifest for one evaluation pass."""
 
     return RunManifest(
-        artifact_id=f"run-{context.model_name}-{context.seed}",
+        artifact_id=f"run-{context.run_name or context.model_name}-{context.seed}",
         artifact_type="run",
-        benchmark_version="0.1-draft",
+        benchmark_version=context.benchmark_version,
         code_version="calibration-baselines-v1",
-        config_hash=f"{context.model_name}-{context.seed}",
-        run_id=f"{context.model_name}-{context.seed}",
+        config_hash=f"{context.run_name or context.model_name}-{context.seed}",
+        run_id=context.run_name or f"{context.model_name}-{context.seed}",
         model_name=context.model_name,
         protocol_name=context.protocol_name,
         baseline_family=baseline_family,
         environment_ids=environment_ids,
-        metadata=model.describe(),
+        metadata=model.describe() | {"run_name": context.run_name, "seed": context.seed},
     )
 
 

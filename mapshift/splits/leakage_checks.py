@@ -22,6 +22,7 @@ class LeakageFinding:
     right_split: str
     overlap_keys: tuple[str, ...]
     example_pairs: tuple[dict[str, Any], ...] = field(default_factory=tuple)
+    rationale: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -42,6 +43,10 @@ class LeakageReport:
         return tuple(finding for finding in self.findings if finding.severity == "warning")
 
     @property
+    def benign(self) -> tuple[LeakageFinding, ...]:
+        return tuple(finding for finding in self.findings if finding.severity == "benign")
+
+    @property
     def ok(self) -> bool:
         return not self.errors
 
@@ -50,6 +55,7 @@ class LeakageReport:
             "ok": self.ok,
             "error_count": len(self.errors),
             "warning_count": len(self.warnings),
+            "benign_count": len(self.benign),
             "findings": [finding.to_dict() for finding in self.findings],
         }
 
@@ -89,6 +95,7 @@ def _make_finding(
     left_entries: list[dict[str, Any]],
     right_entries: list[dict[str, Any]],
     key_field: str,
+    rationale: str = "",
 ) -> LeakageFinding | None:
     left_with_lookup = [entry | {"_lookup_key": str(entry.get(key_field, "")).strip()} for entry in left_entries]
     right_with_lookup = [entry | {"_lookup_key": str(entry.get(key_field, "")).strip()} for entry in right_entries]
@@ -106,6 +113,7 @@ def _make_finding(
         right_split=right_split,
         overlap_keys=tuple(overlap_keys),
         example_pairs=_examples_for_overlap(left_with_lookup, right_with_lookup, overlap_keys),
+        rationale=rationale,
     )
 
 
@@ -130,17 +138,17 @@ def generate_leakage_report(
             left_interventions = intervention_entries_by_split.get(left_split, [])
             right_interventions = intervention_entries_by_split.get(right_split, [])
 
-            for category, severity, key_field, left_entries, right_entries in (
-                ("motif_instance_overlap", "error", "motif_tag", left_envs, right_envs),
-                ("structural_exact_overlap", "error", "geometry_hash", left_envs, right_envs),
-                ("structural_near_overlap", "warning", "normalized_structural_fingerprint", left_envs, right_envs),
-                ("semantic_template_overlap", "error", "semantic_template_id", left_envs, right_envs),
-                ("goal_token_template_overlap", "warning", "goal_token_template_id", left_envs, right_envs),
-                ("landmark_template_overlap", "warning", "landmark_layout_template_id", left_envs, right_envs),
-                ("task_template_overlap", "error", "task_template_id", left_tasks, right_tasks),
-                ("start_goal_template_overlap", "warning", "start_goal_template_id", left_tasks, right_tasks),
-                ("query_template_overlap", "warning", "query_template_id", left_tasks, right_tasks),
-                ("intervention_template_overlap", "error", "intervention_template_id", left_interventions, right_interventions),
+            for category, severity, key_field, left_entries, right_entries, rationale in (
+                ("motif_instance_overlap", "error", "motif_tag", left_envs, right_envs, ""),
+                ("structural_exact_overlap", "error", "geometry_hash", left_envs, right_envs, ""),
+                ("structural_near_overlap", "warning", "normalized_structural_fingerprint", left_envs, right_envs, "Near-overlap is a diagnostic warning; exact geometry/hash overlap is treated as fatal."),
+                ("semantic_template_overlap", "error", "semantic_template_id", left_envs, right_envs, ""),
+                ("goal_token_template_overlap", "benign", "goal_token_template_id", left_envs, right_envs, "Goal-token template ids describe reusable query vocabulary, not shared map instances."),
+                ("landmark_template_overlap", "benign", "landmark_layout_template_id", left_envs, right_envs, "Landmark layout templates are reusable semantic recipes; fatal leakage is checked by semantic_template_id."),
+                ("task_template_overlap", "error", "task_template_id", left_tasks, right_tasks, ""),
+                ("start_goal_template_overlap", "benign", "start_goal_template_id", left_tasks, right_tasks, "Start-goal templates are reusable query forms and are paired with disjoint motif instances."),
+                ("query_template_overlap", "benign", "query_template_id", left_tasks, right_tasks, "Query templates are intentionally reusable across splits to hold language form fixed."),
+                ("intervention_template_overlap", "error", "intervention_template_id", left_interventions, right_interventions, ""),
             ):
                 finding = _make_finding(
                     category=category,
@@ -150,6 +158,7 @@ def generate_leakage_report(
                     left_entries=left_entries,
                     right_entries=right_entries,
                     key_field=key_field,
+                    rationale=rationale,
                 )
                 if finding is not None:
                     findings.append(finding)
@@ -161,10 +170,11 @@ def generate_leakage_report(
                 findings.append(
                     LeakageFinding(
                         category="motif_family_overlap",
-                        severity="warning",
+                        severity="benign",
                         left_split=left_split,
                         right_split=right_split,
                         overlap_keys=tuple(family_overlap),
+                        rationale="Coarse motif-family labels can recur while concrete motif tags and structural hashes remain disjoint.",
                     )
                 )
 

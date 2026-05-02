@@ -88,7 +88,7 @@ class ProcTHORGenerator:
         manifest = EnvironmentManifest(
             artifact_id=f"env-artifact-{scene.scene_id}",
             artifact_type="environment",
-            benchmark_version="0.1-draft",
+            benchmark_version="0.1.0",
             code_version="procthor-deterministic-v1",
             config_hash=self._config_hash(),
             environment_id=scene.scene_id,

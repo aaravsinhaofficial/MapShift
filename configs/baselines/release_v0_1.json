@@ -33,9 +33,9 @@
     },
     {
       "name": "prismx_reference_model",
-      "enabled": true,
+      "enabled": false,
       "category": "reference_structured",
-      "notes": "Reference structured model for mechanism-level diagnosis."
+      "notes": "Omitted from the frozen v0.1 main study because this reference model is not implemented."
     }
   ],
   "sanity_baselines": [
