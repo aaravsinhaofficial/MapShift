@@ -582,6 +582,6 @@ python3 scripts/validate_benchmark.py --tier mapshift_2d configs/benchmark/relea
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+The MapShift source code is licensed under the [MIT License](LICENSE). Generated benchmark outputs, raw episode records, health reports, rendered result tables, and rendered result figures produced by the artifact commands are licensed under CC BY 4.0. Third-party dependencies and tooling are summarized in [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md).
 
 Citation metadata is provided in [`CITATION.cff`](CITATION.cff).
