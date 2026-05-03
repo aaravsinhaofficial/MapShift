@@ -1,0 +1,27 @@
+{
+  "schema_version": "0.1.0",
+  "run_name": "pretrained_structured_graph_world_model_large_pilot_mapshift_2d_v0_1",
+  "baseline_name": "pretrained_structured_graph_world_model",
+  "seed": 0,
+  "exploration_budget_steps": 800,
+  "parameters": {
+    "benchmark_config": "configs/benchmark/release_v0_1.json",
+    "hidden_size": 256,
+    "message_passing_steps": 6,
+    "pair_width": 256,
+    "dynamics_width": 128,
+    "training_epochs": 120,
+    "learning_rate": 0.0005,
+    "validation_fraction": 0.2,
+    "early_stopping_patience": 20,
+    "edge_threshold": 0.35,
+    "max_probe_steps": 16,
+    "pretrain_train_environments": 4000,
+    "pretrain_validation_environments": 800,
+    "pretrain_batch_size": 64,
+    "pretrain_exploration_budget_steps": 800,
+    "pretrain_seed_offset": 20000,
+    "torch_device": "auto",
+    "checkpoint_dir": "/tmp/mapshift_pretrained_graph_world_model_large_pilot"
+  }
+}
