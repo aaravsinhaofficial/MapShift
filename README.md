@@ -12,11 +12,13 @@ This repository is a self-contained executable artifact. It regenerates benchmar
 |---|---|
 | Smoke command | `python3 scripts/build_benchmark.py --tier mapshift_2d --study-config configs/analysis/mapshift_2d_full_study_smoke_v0_1.json --output-dir outputs/releases/mapshift_2d_v0_1_smoke --print-summary` |
 | Full reproduction command | `python3 scripts/build_benchmark.py --tier mapshift_2d --study-config configs/analysis/mapshift_2d_full_study_v0_1.json --output-dir outputs/releases/mapshift_2d_v0_1_full --print-summary` |
-| Expected runtime | Smoke: minutes on CPU. Full: single-GPU run recommended; the reference L4 run should be treated as an overnight job. |
+| Deterministic mechanism diagnostic | `python3 scripts/run_mapshift_2d_study.py configs/analysis/mapshift_2d_belief_update_diagnostic_v0_1.json --print-summary` |
+| Expected runtime | Smoke: minutes on CPU. Deterministic diagnostic: short CPU/GPU run. Full: single-GPU run recommended; the reference NVIDIA L4 run took about 11.5 wall-clock hours. |
 | CPU/GPU requirements | CPU works for validation and smoke. Full study works on CPU but is intended for a CUDA-capable PyTorch install when available. |
 | Disk usage | Reserve 5GB for generated outputs and checkpoints; reserve more if installing CUDA PyTorch wheels into a fresh environment. |
 | Output paths | `outputs/releases/<run_name>/health`, `study`, `paper_outputs`, `manifests`, and `logs`. |
 | Tables/figures regenerate | `python3 scripts/render_paper_outputs.py <study_bundle.json> --output-dir <paper_outputs> --print-summary` |
+| Paper PDF build | `tectonic paper.tex` |
 | Version/config hash | Package version `0.1.0`; schema version `0.1.0`; release manifest records `config_hash`. |
 | Dependency installation | `python3 -m pip install -e .` from a fresh Python 3.10+ environment. |
 | Baseline hyperparameters | See `configs/calibration/*.json` and the table below. |
@@ -149,7 +151,7 @@ Recommended hardware:
 Expected runtime:
 
 - Smoke: minutes.
-- Full single-GPU study: overnight-scale. Runtime is dominated by task generation, evaluation loops, bootstrap aggregation, and rendering. The learned training jobs are small.
+- Full single-GPU study: overnight-scale. The completed reference run used one NVIDIA L4 and took about 11.5 wall-clock hours. Runtime is dominated by task generation, evaluation loops, bootstrap aggregation, and rendering. The learned training jobs are small.
 - Full CPU-only study: possible but not recommended for deadline-sensitive reproduction.
 
 Monitor progress:
@@ -164,7 +166,7 @@ Count evaluation chunks:
 grep -c "evaluating family=" outputs/releases/mapshift_2d_v0_1_full/logs/build_benchmark.log
 ```
 
-The full config currently runs one primary CEP sweep plus five protocol-comparison sweeps. Each sweep has 8 motifs x 4 intervention families = 32 logged family chunks, so a completed run should log roughly 192 `evaluating family=` lines.
+The full config currently runs one primary CEP sweep plus four protocol-comparison sweeps. Each sweep has 8 motifs x 4 intervention families = 32 logged family chunks, so a completed run should log roughly 160 `evaluating family=` lines.
 
 Check completion:
 
@@ -186,6 +188,113 @@ outputs/releases/mapshift_2d_v0_1_full/paper_outputs/figures/familywise_main_res
 outputs/releases/mapshift_2d_v0_1_full/paper_outputs/figures/severity_response_curves.svg
 outputs/releases/mapshift_2d_v0_1_full/paper_outputs/figures/protocol_rank_reversal_comparison.svg
 ```
+
+## Reproducing Paper Claims
+
+The paper's claims come from two executable study paths and two checked-in publication figures.
+
+| Paper item | Reproduction source |
+|---|---|
+| Figure 1, CEP protocol diagram | `figures/cep_protocol_diagram.png`; a data-free SVG version can be regenerated with `scripts/render_paper_outputs.py --protocol-diagram-only`. |
+| Figure 2, matched intervention pairs | `figures/intervention_pairs.pdf`; generated examples are also rendered by `scripts/render_paper_outputs.py` as `intervention_examples_2d.svg`. |
+| Benchmark health summary | Full reproduction run, `outputs/releases/mapshift_2d_v0_1_full/study/tables/benchmark_health_summary.json`. |
+| Full-run family-wise calibration table | Full reproduction run, `outputs/releases/mapshift_2d_v0_1_full/study/tables/familywise_main_results.json` and `paper_outputs/tables/main_familywise_results.md`. |
+| Full-run protocol sensitivity | Full reproduction run, `outputs/releases/mapshift_2d_v0_1_full/study/tables/protocol_sensitivity_and_rank_correlation.json`. |
+| Severity-response and family stress profiles | Full reproduction run, `outputs/releases/mapshift_2d_v0_1_full/study/tables/severity_response.json` and `paper_outputs/figures/severity_response_curves.svg`. |
+| Deterministic mechanism diagnostic | Belief-update diagnostic run, `outputs/studies/mapshift_2d_belief_update_diagnostic_v0_1/study_bundle.json`. |
+| Conclusion audit | Combination of the full reproduction run and the belief-update diagnostic run. |
+| Baseline metadata and hyperparameters | `configs/calibration/*.json`, `outputs/releases/mapshift_2d_v0_1_full/study/raw/cep_report.json`, and `paper_outputs/tables/baseline_metadata.md`. |
+
+Run the full reproduction path first:
+
+```bash
+python3 scripts/build_benchmark.py \
+  --tier mapshift_2d \
+  --study-config configs/analysis/mapshift_2d_full_study_v0_1.json \
+  --output-dir outputs/releases/mapshift_2d_v0_1_full \
+  --print-summary
+```
+
+Then run the deterministic mechanism diagnostic used for the stale-map versus belief-update claims:
+
+```bash
+python3 scripts/run_mapshift_2d_study.py \
+  configs/analysis/mapshift_2d_belief_update_diagnostic_v0_1.json \
+  --print-summary
+```
+
+Expected diagnostic outputs:
+
+```text
+outputs/studies/mapshift_2d_belief_update_diagnostic_v0_1/
+  logs/run_mapshift_2d_study.log
+  raw/cep_report.json
+  raw/protocol_comparison_report.json
+  raw/benchmark_health_report.json
+  tables/familywise_main_results.json
+  tables/protocol_sensitivity_and_rank_correlation.json
+  tables/benchmark_health_summary.json
+  figures/*.json
+  manifests/study_manifest.json
+  study_bundle.json
+```
+
+Inspect the full-run health gates cited in the paper:
+
+```bash
+python3 - <<'PY'
+import json
+from pathlib import Path
+p = Path("outputs/releases/mapshift_2d_v0_1_full/study/tables/benchmark_health_summary.json")
+print(json.dumps(json.loads(p.read_text()), indent=2))
+PY
+```
+
+Inspect the full-run protocol sensitivity table:
+
+```bash
+python3 - <<'PY'
+import json
+from pathlib import Path
+p = Path("outputs/releases/mapshift_2d_v0_1_full/study/tables/protocol_sensitivity_and_rank_correlation.json")
+print(json.dumps(json.loads(p.read_text()), indent=2))
+PY
+```
+
+Inspect the deterministic mechanism diagnostic scores and rank changes:
+
+```bash
+python3 - <<'PY'
+import json
+from pathlib import Path
+b = json.loads(Path("outputs/studies/mapshift_2d_belief_update_diagnostic_v0_1/study_bundle.json").read_text())
+
+print("=== Proposition support ===")
+print(json.dumps(b["proposition_support"], indent=2))
+
+print("\n=== Family-wise CEP scores ===")
+rows = b["raw_reports"]["cep_report"]["familywise_summary"]["rows"]
+for row in rows:
+    print(
+        row["baseline_name"],
+        row["family"],
+        round(row["family_primary_score"], 3),
+        "episodes=", row["episode_count"],
+    )
+
+print("\n=== Protocol comparisons ===")
+for name, comp in b["protocol_sensitivity"]["pairwise_comparisons"].items():
+    print(name, "tau=", comp.get("kendall_tau"), "best_changes=", comp.get("best_method_changes"))
+PY
+```
+
+Build the submitted PDF after regenerating outputs:
+
+```bash
+tectonic paper.tex
+```
+
+The paper source is `paper.tex`, citations are in `paper.bib`, and the NeurIPS style file is `neurips_2026.sty`.
 
 ## Regenerating Tables and Figures
 
