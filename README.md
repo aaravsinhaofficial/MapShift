@@ -4,13 +4,13 @@ MapShift is an executable benchmark and evaluation protocol for testing whether 
 
 This repository is the code artifact for the current MapShift release. It contains the environment generator, intervention operators, task samplers, benchmark health checks, baselines, study runner, raw-record outputs, and paper table/figure renderers.
 
-## Code-Release Summary
+## Artifact Overview
 
-For NeurIPS E&D review, this repository should be supplied through the OpenReview **Code URL** field. It is an executable benchmark/generator, not a hosted static dataset. Do not check the OpenReview dataset box unless you separately package generated instances as a dataset with the required metadata. Written appendices belong in the paper PDF, not in supplementary material.
+This repository is a self-contained executable artifact. It regenerates benchmark instances, health checks, raw evaluation records, summary tables, rendered figures, and provenance manifests from versioned source code and configuration files. Generated instances are benchmark artifacts produced by the code, not a separately hosted static dataset.
 
-| Requirement | Where it is handled |
+| Artifact component | Location or command |
 |---|---|
-| Reviewer smoke command | `python3 scripts/build_benchmark.py --tier mapshift_2d --study-config configs/analysis/mapshift_2d_full_study_smoke_v0_1.json --output-dir outputs/releases/mapshift_2d_v0_1_smoke --print-summary` |
+| Smoke command | `python3 scripts/build_benchmark.py --tier mapshift_2d --study-config configs/analysis/mapshift_2d_full_study_smoke_v0_1.json --output-dir outputs/releases/mapshift_2d_v0_1_smoke --print-summary` |
 | Full reproduction command | `python3 scripts/build_benchmark.py --tier mapshift_2d --study-config configs/analysis/mapshift_2d_full_study_v0_1.json --output-dir outputs/releases/mapshift_2d_v0_1_full --print-summary` |
 | Expected runtime | Smoke: minutes on CPU. Full: single-GPU run recommended; the reference L4 run should be treated as an overnight job. |
 | CPU/GPU requirements | CPU works for validation and smoke. Full study works on CPU but is intended for a CUDA-capable PyTorch install when available. |
@@ -96,7 +96,7 @@ Run tests:
 python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
-## Reviewer Smoke Run
+## Smoke Run
 
 The smoke command builds a small release artifact: config copies, split manifests, benchmark health, a learned-baseline smoke study, JSON tables, SVG figures, and manifests.
 
@@ -108,7 +108,7 @@ python3 scripts/build_benchmark.py \
   --print-summary
 ```
 
-Expected runtime: a few minutes on a typical laptop or CPU VM. It is intended for reviewer sanity checking, not for reproducing paper-scale confidence intervals.
+Expected runtime: a few minutes on a typical laptop or CPU VM. It is intended for artifact sanity checking, not for reproducing paper-scale confidence intervals.
 
 Expected outputs:
 
@@ -432,7 +432,7 @@ grep -c "evaluating family=" outputs/releases/mapshift_2d_v0_1_full/logs/build_b
 
 Large output directory:
 
-The raw JSON records and protocol comparison reports are the largest generated artifacts. Remove or archive `outputs/releases/<run_name>` after copying the files needed for submission. Learned checkpoints are in `MAPSHIFT_CHECKPOINT_DIR` or the config default `/tmp/mapshift_learned_baselines`.
+The raw JSON records and protocol comparison reports are the largest generated artifacts. Generated release directories can be archived after preserving the files needed for reproduction. Learned checkpoints are in `MAPSHIFT_CHECKPOINT_DIR` or the config default `/tmp/mapshift_learned_baselines`.
 
 Validation fails due to 3D prototype:
 
