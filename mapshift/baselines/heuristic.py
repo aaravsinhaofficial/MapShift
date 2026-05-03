@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from mapshift.envs.map2d.state import Cell, Map2DEnvironment
 from mapshift.envs.procthor.observation import observe_scene
 from mapshift.envs.procthor.wrappers import ProcTHORPose, ProcTHORScene
 from mapshift.tasks.adaptation import AdaptationTask
@@ -370,3 +371,157 @@ class WeakHeuristicBaseline(BaseBaselineModel):
 
 
 register_baseline(WeakHeuristicBaseline.name, WeakHeuristicBaseline)
+
+
+class StaleMapPlannerBaseline(WeakHeuristicBaseline):
+    """Diagnostic baseline that keeps planning on the pre-intervention map."""
+
+    name = "stale_map_planner"
+    category = "diagnostic_reference"
+    supported_tiers = ("mapshift_2d",)
+
+    def explore(self, environment: Any, context: BaselineContext) -> ExplorationResult:
+        exploration = super().explore(environment, context)
+        memory = dict(exploration.memory)
+        memory["diagnostic_policy"] = "pre_intervention_map_only"
+        return ExplorationResult(
+            baseline_name=self.name,
+            environment_id=exploration.environment_id,
+            exploration_steps=exploration.exploration_steps,
+            visited_cells=exploration.visited_cells,
+            visited_node_ids=exploration.visited_node_ids,
+            hidden_state=exploration.hidden_state,
+            memory=memory,
+        )
+
+    def _evaluate_planning(
+        self,
+        environment: Any,
+        task: PlanningTask,
+        exploration: ExplorationResult,
+    ) -> TaskEvaluationResult:
+        if not isinstance(environment, Map2DEnvironment):
+            return super()._evaluate_planning(environment, task, exploration)
+        base_environment = self._base_map_from_exploration(exploration) or environment
+        remembered_tokens = exploration.memory.get("remembered_goal_tokens", {})
+        goal_node, goal_matches_task = goal_node_for_task(base_environment, task, remembered_goal_tokens=remembered_tokens)
+        stale_path = None if goal_node is None else base_environment.oracle_shortest_path(task.start_node_id, goal_node)
+        executed_path = tuple(stale_path or ())
+        path_still_valid = bool(executed_path) and self._path_valid_in_environment(environment, executed_path)
+        oracle_length = None if task.goal_node_id is None else environment.shortest_path_length(task.start_node_id, task.goal_node_id)
+        observed_length = None
+        if stale_path is not None and path_still_valid:
+            observed_length = max(0, len(stale_path) - 1) * environment.occupancy_resolution_m * environment.geometry_scale
+            observed_length *= dynamics_cost_multiplier(environment)
+        success = (
+            goal_node is not None
+            and goal_matches_task
+            and stale_path is not None
+            and path_still_valid
+            and horizon_allows_path(task, observed_length, environment)
+        )
+        return TaskEvaluationResult(
+            baseline_name=self.name,
+            task_class="planning",
+            task_type=task.task_type,
+            family=task.family,
+            success=success,
+            solvable=oracle_length is not None,
+            observed_length=observed_length,
+            oracle_length=oracle_length,
+            path_efficiency=path_efficiency_from_lengths(oracle_length, observed_length),
+            oracle_gap=None if oracle_length is None or observed_length is None else max(0.0, observed_length - oracle_length),
+            path_cells=executed_path,
+            metadata={
+                "goal_matches_task": goal_matches_task,
+                "planner": "pre_intervention_shortest_path",
+                "path_still_valid": path_still_valid,
+                "shift_severity": family_shift_severity(environment, task.family),
+                "stale_base_environment_id": base_environment.environment_id,
+            },
+        )
+
+    def _evaluate_inference(self, task: InferenceTask, exploration: ExplorationResult) -> TaskEvaluationResult:
+        predicted_answer: Any
+        if task.task_type == "detect_topology_change":
+            predicted_answer = False
+        elif task.task_type == "counterfactual_reachability_query":
+            remembered_tokens = exploration.memory.get("remembered_goal_tokens", {})
+            token = ""
+            for piece in task.query.split():
+                if piece.startswith("target_"):
+                    token = piece
+                    break
+            predicted_answer = remembered_tokens.get(token)
+        elif task.expected_output_type == "intervention_family":
+            predicted_answer = "none"
+        else:
+            predicted_answer = None
+        correct = predicted_answer == task.expected_answer
+        return TaskEvaluationResult(
+            baseline_name=self.name,
+            task_class="inference",
+            task_type=task.task_type,
+            family=task.family,
+            success=bool(correct),
+            solvable=True,
+            predicted_answer=predicted_answer,
+            correct=bool(correct),
+            metadata={"diagnostic_policy": "no_intervention_belief"},
+        )
+
+    def _evaluate_adaptation(
+        self,
+        environment: Any,
+        task: AdaptationTask,
+        exploration: ExplorationResult,
+    ) -> TaskEvaluationResult:
+        if not isinstance(environment, Map2DEnvironment):
+            return super()._evaluate_adaptation(environment, task, exploration)
+        proxy_planning = PlanningTask(
+            task_type=task.task_type,
+            horizon_steps=task.evaluation_horizon_steps,
+            family=task.family,
+            start_node_id=task.start_node_id,
+            goal_node_id=task.goal_node_id,
+            goal_token=None,
+            goal_descriptor=task.goal_node_id,
+            metadata=dict(task.metadata),
+        )
+        planning_result = self._evaluate_planning(environment, proxy_planning, exploration)
+        final_score = planning_result.path_efficiency if planning_result.success else 0.0
+        curve = (final_score, final_score, final_score)
+        return TaskEvaluationResult(
+            baseline_name=self.name,
+            task_class="adaptation",
+            task_type=task.task_type,
+            family=task.family,
+            success=planning_result.success,
+            solvable=planning_result.solvable,
+            observed_length=planning_result.observed_length,
+            oracle_length=planning_result.oracle_length,
+            path_efficiency=planning_result.path_efficiency,
+            oracle_gap=planning_result.oracle_gap,
+            adaptation_curve=curve,
+            path_cells=planning_result.path_cells,
+            metadata={
+                "diagnostic_policy": "no_post_intervention_adaptation",
+                "base_success": planning_result.success,
+            },
+        )
+
+    def _base_map_from_exploration(self, exploration: ExplorationResult) -> Map2DEnvironment | None:
+        payload = exploration.memory.get("base_environment_payload")
+        if not isinstance(payload, dict):
+            return None
+        return Map2DEnvironment.from_dict(payload)
+
+    def _path_valid_in_environment(self, environment: Map2DEnvironment, path: tuple[Cell, ...]) -> bool:
+        if not path:
+            return False
+        if not all(environment.is_free(cell) for cell in path):
+            return False
+        return all(right in environment.neighbors(left) for left, right in zip(path, path[1:]))
+
+
+register_baseline(StaleMapPlannerBaseline.name, StaleMapPlannerBaseline)

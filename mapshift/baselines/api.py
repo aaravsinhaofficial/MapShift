@@ -19,6 +19,7 @@ _KNOWN_BASELINE_TIERS: dict[str, tuple[str, ...]] = {
     "oracle_post_intervention_planner": ("mapshift_2d", "mapshift_3d"),
     "same_environment_upper_baseline": ("mapshift_2d", "mapshift_3d"),
     "weak_heuristic_baseline": ("mapshift_2d", "mapshift_3d"),
+    "stale_map_planner": ("mapshift_2d",),
     "monolithic_recurrent_world_model": ("mapshift_2d",),
     "persistent_memory_world_model": ("mapshift_2d",),
     "relational_graph_world_model": ("mapshift_2d",),

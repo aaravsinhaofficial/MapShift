@@ -1,0 +1,11 @@
+{
+  "schema_version": "0.1.0",
+  "run_name": "stale_map_planner_mapshift_2d_v0_1",
+  "baseline_name": "stale_map_planner",
+  "seed": 0,
+  "exploration_budget_steps": 800,
+  "parameters": {
+    "planner": "pre_intervention_shortest_path",
+    "adaptation": "disabled_after_intervention"
+  }
+}
