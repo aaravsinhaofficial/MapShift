@@ -211,12 +211,12 @@ outputs/releases/mapshift_2d_v0_1_full/paper_outputs/figures/protocol_rank_rever
 
 ## Reproducing Paper Claims
 
-The paper's claims come from two executable study paths and two checked-in publication figures.
+The paper's empirical claims come from two executable study paths. The submitted `paper.pdf` contains the publication figures; the artifact also regenerates code-produced protocol and intervention-example SVGs for reviewer inspection.
 
 | Paper item | Reproduction source |
 |---|---|
-| Figure 1, CEP protocol diagram | `figures/cep_protocol_diagram.png`; a data-free SVG version can be regenerated with `scripts/render_paper_outputs.py --protocol-diagram-only`. |
-| Figure 2, matched intervention pairs | `figures/intervention_pairs.pdf`; generated examples are also rendered by `scripts/render_paper_outputs.py` as `intervention_examples_2d.svg`. |
+| Figure 1, CEP protocol diagram | Included in `paper.pdf`; a data-free SVG version can be regenerated with `scripts/render_paper_outputs.py --protocol-diagram-only`. |
+| Figure 2, matched intervention pairs | Included in `paper.pdf`; generated intervention examples are rendered by `scripts/render_paper_outputs.py` as `intervention_examples_2d.svg`. |
 | Benchmark health summary | Full reproduction run, `outputs/releases/mapshift_2d_v0_1_full/study/tables/benchmark_health_summary.json`. |
 | Full-run family-wise calibration table | Full reproduction run, `outputs/releases/mapshift_2d_v0_1_full/study/tables/familywise_main_results.json` and `paper_outputs/tables/main_familywise_results.md`. |
 | Full-run protocol sensitivity | Full reproduction run, `outputs/releases/mapshift_2d_v0_1_full/study/tables/protocol_sensitivity_and_rank_correlation.json`. |
