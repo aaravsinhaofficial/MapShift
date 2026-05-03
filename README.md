@@ -254,19 +254,28 @@ PY
 
 ## Baselines and Hyperparameters
 
-The main study uses seven scientific baseline classes. Deterministic reference baselines have no trainable parameters.
+The main study uses eight scientific baseline classes. Deterministic reference and classical baselines have no trainable parameters.
 
 | Baseline | Config | Key hyperparameters |
 |---|---|---|
 | `oracle_post_intervention_planner` | `configs/calibration/oracle_post_intervention_planner_v0_1.json` | oracle access; no training |
 | `same_environment_upper_baseline` | `configs/calibration/same_environment_upper_baseline_v0_1.json` | same-environment reference; no training |
 | `weak_heuristic_baseline` | `configs/calibration/weak_heuristic_baseline_v0_1.json` | visited-state heuristic; no training |
+| `classical_belief_update_planner` | `configs/calibration/classical_belief_update_planner_v0_1.json` | occupancy-map plus belief update; edge/cost/dynamics/token updates; no training |
 | `monolithic_recurrent_world_model` | `configs/calibration/monolithic_recurrent_world_model_v0_1.json` | hidden size 12, observation stride 2, 6 epochs, lr 0.01, max rollout 8 |
 | `persistent_memory_world_model` | `configs/calibration/persistent_memory_world_model_v0_1.json` | 16 memory slots, slot stride 3, readout width 8, 8 epochs, lr 0.01, max rollout 8 |
 | `relational_graph_world_model` | `configs/calibration/relational_graph_world_model_v0_1.json` | hidden size 10, 2 message-passing steps, 10 epochs, lr 0.01 |
 | `structured_dynamics_world_model` | `configs/calibration/structured_dynamics_world_model_v0_1.json` | geometry width 10, dynamics width 6, 10 epochs, lr 0.01 |
 
 Learned baselines train separately for each base environment and model seed from the reward-free exploration trace. They are not pretrained across environments. The full study expands learned baselines over seeds `[0, 1, 2, 3, 4]` using `configs/analysis/mapshift_2d_full_study_v0_1.json`.
+
+For a faster deterministic diagnostic that isolates stale maps, local heuristics, and explicit belief updates, run:
+
+```bash
+python3 scripts/run_mapshift_2d_study.py \
+  configs/analysis/mapshift_2d_belief_update_diagnostic_v0_1.json \
+  --print-summary
+```
 
 Training targets are derived from the exploration-time graph representation:
 

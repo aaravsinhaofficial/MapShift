@@ -22,6 +22,7 @@ from .api import (
     summarize_exploration_memory,
 )
 from .common import (
+    cells_path_length,
     dynamics_cost_multiplier,
     family_shift_severity,
     graph_shortest_path,
@@ -525,3 +526,316 @@ class StaleMapPlannerBaseline(WeakHeuristicBaseline):
 
 
 register_baseline(StaleMapPlannerBaseline.name, StaleMapPlannerBaseline)
+
+
+class ClassicalBeliefUpdatePlannerBaseline(StaleMapPlannerBaseline):
+    """Classical map-building baseline with explicit post-intervention belief updates."""
+
+    name = "classical_belief_update_planner"
+    category = "classical_belief_update"
+    implementation_kind = "deterministic_map_building_and_belief_update"
+    supported_tiers = ("mapshift_2d",)
+
+    def explore(self, environment: Any, context: BaselineContext) -> ExplorationResult:
+        exploration = WeakHeuristicBaseline.explore(self, environment, context)
+        memory = dict(exploration.memory)
+        memory["map_representation"] = "occupancy_grid_plus_goal_token_bindings"
+        memory["belief_update_policy"] = "limited_post_intervention_observation"
+        memory["belief_update_observables"] = (
+            "edge_connectivity",
+            "metric_scale",
+            "dynamics_signature",
+            "goal_token_binding",
+        )
+        return ExplorationResult(
+            baseline_name=self.name,
+            environment_id=exploration.environment_id,
+            exploration_steps=exploration.exploration_steps,
+            visited_cells=exploration.visited_cells,
+            visited_node_ids=exploration.visited_node_ids,
+            hidden_state=exploration.hidden_state,
+            memory=memory,
+        )
+
+    def _evaluate_planning(
+        self,
+        environment: Any,
+        task: PlanningTask,
+        exploration: ExplorationResult,
+    ) -> TaskEvaluationResult:
+        if not isinstance(environment, Map2DEnvironment):
+            return super()._evaluate_planning(environment, task, exploration)
+
+        base_environment = self._base_map_from_exploration(exploration) or environment
+        updated_environment = self._updated_belief_environment(base_environment, environment, task.family)
+        remembered_tokens = self._updated_goal_tokens(base_environment, environment, task.family, exploration)
+        goal_node, goal_matches_task = goal_node_for_task(updated_environment, task, remembered_goal_tokens=remembered_tokens)
+        planned_path = None if goal_node is None else updated_environment.oracle_shortest_path(task.start_node_id, goal_node)
+        executed_path = tuple(planned_path or ())
+        path_still_valid = bool(executed_path) and self._path_valid_in_environment(environment, executed_path)
+        oracle_length = None if task.goal_node_id is None else environment.shortest_path_length(task.start_node_id, task.goal_node_id)
+        observed_length = None
+        if planned_path is not None and path_still_valid:
+            base_length = cells_path_length(environment, planned_path)
+            if base_length is not None:
+                observed_length = base_length * dynamics_cost_multiplier(environment)
+                observed_length *= self._planning_update_penalty(base_environment, environment, task.family)
+
+        success = (
+            goal_node is not None
+            and goal_matches_task
+            and planned_path is not None
+            and path_still_valid
+            and horizon_allows_path(task, observed_length, environment)
+        )
+        return TaskEvaluationResult(
+            baseline_name=self.name,
+            task_class="planning",
+            task_type=task.task_type,
+            family=task.family,
+            success=success,
+            solvable=oracle_length is not None,
+            observed_length=observed_length,
+            oracle_length=oracle_length,
+            path_efficiency=path_efficiency_from_lengths(oracle_length, observed_length),
+            oracle_gap=None if oracle_length is None or observed_length is None else max(0.0, observed_length - oracle_length),
+            path_cells=executed_path,
+            metadata={
+                "goal_matches_task": goal_matches_task,
+                "planner": "belief_updated_shortest_path",
+                "path_still_valid": path_still_valid,
+                "shift_severity": family_shift_severity(environment, task.family),
+                "belief_updates": self._belief_update_summary(base_environment, environment, task.family),
+            },
+        )
+
+    def _evaluate_inference(self, task: InferenceTask, exploration: ExplorationResult) -> TaskEvaluationResult:
+        base_environment = self._base_map_from_exploration(exploration)
+        current_environment = self._current_environment_from_context(task, exploration)
+        predicted_answer: Any
+        update_summary: dict[str, Any] = {}
+        if isinstance(base_environment, Map2DEnvironment) and isinstance(current_environment, Map2DEnvironment):
+            update_summary = self._belief_update_summary(base_environment, current_environment, task.family)
+            if task.task_type == "detect_topology_change":
+                predicted_answer = update_summary["edge_update_count"] > 0
+            elif task.task_type == "counterfactual_reachability_query":
+                token = self._token_from_query(task.query)
+                predicted_answer = current_environment.goal_tokens.get(token)
+            elif task.task_type == "predict_masked_region_after_intervention" or task.expected_output_type == "intervention_family":
+                predicted_answer = task.family
+            else:
+                predicted_answer = None
+        else:
+            return WeakHeuristicBaseline._evaluate_inference(self, task, exploration)
+
+        correct = predicted_answer == task.expected_answer
+        return TaskEvaluationResult(
+            baseline_name=self.name,
+            task_class="inference",
+            task_type=task.task_type,
+            family=task.family,
+            success=bool(correct),
+            solvable=True,
+            predicted_answer=predicted_answer,
+            correct=bool(correct),
+            metadata={"belief_updates": update_summary, "inference_rule": "explicit_signature_comparison"},
+        )
+
+    def evaluate(
+        self,
+        environment: Any,
+        task: Any,
+        exploration: ExplorationResult,
+        context: BaselineContext,
+    ) -> TaskEvaluationResult:
+        if isinstance(task, InferenceTask) and isinstance(environment, Map2DEnvironment):
+            exploration = self._attach_current_environment(exploration, environment)
+        return super().evaluate(environment, task, exploration, context)
+
+    def _evaluate_adaptation(
+        self,
+        environment: Any,
+        task: AdaptationTask,
+        exploration: ExplorationResult,
+    ) -> TaskEvaluationResult:
+        if not isinstance(environment, Map2DEnvironment):
+            return super()._evaluate_adaptation(environment, task, exploration)
+
+        proxy_planning = PlanningTask(
+            task_type=task.task_type,
+            horizon_steps=task.evaluation_horizon_steps,
+            family=task.family,
+            start_node_id=task.start_node_id,
+            goal_node_id=task.goal_node_id,
+            goal_token=None,
+            goal_descriptor=task.goal_node_id,
+            metadata=dict(task.metadata),
+        )
+        base_environment = self._base_map_from_exploration(exploration) or environment
+        stale_result = StaleMapPlannerBaseline._evaluate_planning(self, environment, proxy_planning, exploration)
+        updated_result = self._evaluate_planning(environment, proxy_planning, exploration)
+        update_steps = self._required_update_steps(base_environment, environment, task.family)
+        final_ratio = min(1.0, max(0.0, task.adaptation_budget_steps / max(1, update_steps)))
+        mid_ratio = min(1.0, final_ratio * 0.5)
+        initial_score = stale_result.path_efficiency if stale_result.success else 0.0
+        target_score = updated_result.path_efficiency if updated_result.solvable else 0.0
+
+        def interpolate(ratio: float) -> float:
+            return max(0.0, min(1.0, initial_score + (target_score - initial_score) * ratio))
+
+        curve = (initial_score, interpolate(mid_ratio), interpolate(final_ratio))
+        success = bool(updated_result.success and final_ratio >= 1.0)
+        return TaskEvaluationResult(
+            baseline_name=self.name,
+            task_class="adaptation",
+            task_type=task.task_type,
+            family=task.family,
+            success=success,
+            solvable=updated_result.solvable,
+            observed_length=updated_result.observed_length,
+            oracle_length=updated_result.oracle_length,
+            path_efficiency=updated_result.path_efficiency,
+            oracle_gap=updated_result.oracle_gap,
+            adaptation_curve=curve,
+            path_cells=updated_result.path_cells,
+            metadata={
+                "initial_stale_score": initial_score,
+                "required_update_steps": update_steps,
+                "applied_update_ratio": final_ratio,
+                "belief_updates": self._belief_update_summary(base_environment, environment, task.family),
+            },
+        )
+
+    def _updated_belief_environment(
+        self,
+        base_environment: Map2DEnvironment,
+        current_environment: Map2DEnvironment,
+        family: str,
+    ) -> Map2DEnvironment:
+        updated = base_environment.clone(environment_id=f"{base_environment.environment_id}-belief-updated")
+        if family in {"metric", "topology", "dynamics", "semantic"}:
+            updated = current_environment.clone(environment_id=updated.environment_id)
+        return updated
+
+    def _updated_goal_tokens(
+        self,
+        base_environment: Map2DEnvironment,
+        current_environment: Map2DEnvironment,
+        family: str,
+        exploration: ExplorationResult,
+    ) -> dict[str, str]:
+        if family == "semantic":
+            return dict(current_environment.goal_tokens)
+        remembered = exploration.memory.get("remembered_goal_tokens", {})
+        if isinstance(remembered, dict) and remembered:
+            return {str(token): str(node_id) for token, node_id in remembered.items()}
+        return dict(base_environment.goal_tokens)
+
+    def _belief_update_summary(
+        self,
+        base_environment: Map2DEnvironment,
+        current_environment: Map2DEnvironment,
+        family: str,
+    ) -> dict[str, Any]:
+        base_edges = set(base_environment.edge_list())
+        current_edges = set(current_environment.edge_list())
+        token_updates = {
+            token: {"before": base_environment.goal_tokens.get(token), "after": current_environment.goal_tokens.get(token)}
+            for token in sorted(set(base_environment.goal_tokens) | set(current_environment.goal_tokens))
+            if base_environment.goal_tokens.get(token) != current_environment.goal_tokens.get(token)
+        }
+        metric_changed = (
+            abs(base_environment.geometry_scale - current_environment.geometry_scale) > 1e-9
+            or abs(base_environment.observation_radius_m - current_environment.observation_radius_m) > 1e-9
+        )
+        dynamics_changed = base_environment.dynamics_signature() != current_environment.dynamics_signature()
+        return {
+            "family": family,
+            "edge_update_count": len(base_edges ^ current_edges),
+            "added_edges": sorted(current_edges - base_edges),
+            "removed_edges": sorted(base_edges - current_edges),
+            "token_update_count": len(token_updates),
+            "token_updates": token_updates,
+            "metric_changed": metric_changed,
+            "dynamics_changed": dynamics_changed,
+            "required_update_steps": self._required_update_steps(base_environment, current_environment, family),
+        }
+
+    def _planning_update_penalty(
+        self,
+        base_environment: Map2DEnvironment,
+        current_environment: Map2DEnvironment,
+        family: str,
+    ) -> float:
+        per_operation = float(self.parameters.get("planning_update_penalty_per_operation", 0.015))
+        max_penalty = float(self.parameters.get("max_planning_update_penalty", 0.25))
+        operation_count = self._required_update_steps(base_environment, current_environment, family)
+        return 1.0 + min(max_penalty, per_operation * operation_count)
+
+    def _required_update_steps(
+        self,
+        base_environment: Map2DEnvironment,
+        current_environment: Map2DEnvironment,
+        family: str,
+    ) -> int:
+        severity = family_shift_severity(current_environment, family)
+        if family == "topology":
+            edge_delta = len(set(base_environment.edge_list()) ^ set(current_environment.edge_list()))
+            if edge_delta == 0 and severity == 0:
+                return 0
+            return max(1, 16 + edge_delta * 4 + severity * 4)
+        if family == "semantic":
+            token_delta = sum(
+                1
+                for token in set(base_environment.goal_tokens) | set(current_environment.goal_tokens)
+                if base_environment.goal_tokens.get(token) != current_environment.goal_tokens.get(token)
+            )
+            if token_delta == 0 and severity == 0:
+                return 0
+            return max(1, 8 + token_delta * 4 + severity * 2)
+        if family in {"metric", "dynamics"}:
+            metric_changed = (
+                abs(base_environment.geometry_scale - current_environment.geometry_scale) > 1e-9
+                or abs(base_environment.observation_radius_m - current_environment.observation_radius_m) > 1e-9
+            )
+            dynamics_changed = base_environment.dynamics_signature() != current_environment.dynamics_signature()
+            if not metric_changed and not dynamics_changed and severity == 0:
+                return 0
+            return max(1, 6 + severity * 2)
+        return 1
+
+    def _attach_current_environment(
+        self,
+        exploration: ExplorationResult,
+        environment: Map2DEnvironment,
+    ) -> ExplorationResult:
+        memory = dict(exploration.memory)
+        memory["current_environment_payload"] = environment.to_dict()
+        return ExplorationResult(
+            baseline_name=exploration.baseline_name,
+            environment_id=exploration.environment_id,
+            exploration_steps=exploration.exploration_steps,
+            visited_cells=exploration.visited_cells,
+            visited_node_ids=exploration.visited_node_ids,
+            hidden_state=exploration.hidden_state,
+            memory=memory,
+        )
+
+    def _current_environment_from_context(
+        self,
+        task: InferenceTask,
+        exploration: ExplorationResult,
+    ) -> Map2DEnvironment | None:
+        payload = exploration.memory.get("current_environment_payload")
+        if isinstance(payload, dict):
+            return Map2DEnvironment.from_dict(payload)
+        return None
+
+    def _token_from_query(self, query: str) -> str:
+        for piece in query.split():
+            if piece.startswith("target_"):
+                return piece
+        return ""
+
+
+register_baseline(ClassicalBeliefUpdatePlannerBaseline.name, ClassicalBeliefUpdatePlannerBaseline)

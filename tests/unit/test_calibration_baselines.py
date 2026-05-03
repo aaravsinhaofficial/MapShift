@@ -23,6 +23,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT_CONFIG = REPO_ROOT / "configs" / "benchmark" / "release_v0_1.json"
 ORACLE_CONFIG = REPO_ROOT / "configs" / "calibration" / "oracle_post_intervention_planner_v0_1.json"
 HEURISTIC_CONFIG = REPO_ROOT / "configs" / "calibration" / "weak_heuristic_baseline_v0_1.json"
+CLASSICAL_CONFIG = REPO_ROOT / "configs" / "calibration" / "classical_belief_update_planner_v0_1.json"
+STALE_CONFIG = REPO_ROOT / "configs" / "calibration" / "stale_map_planner_v0_1.json"
 RECURRENT_CONFIG = REPO_ROOT / "configs" / "calibration" / "monolithic_recurrent_world_model_v0_1.json"
 MEMORY_CONFIG = REPO_ROOT / "configs" / "calibration" / "persistent_memory_world_model_v0_1.json"
 RELATIONAL_CONFIG = REPO_ROOT / "configs" / "calibration" / "relational_graph_world_model_v0_1.json"
@@ -191,6 +193,69 @@ class CalibrationBaselineTests(unittest.TestCase):
         second = run_evaluation(heuristic, environment, task, exploration, context)
 
         self.assertEqual(first.to_dict(), second.to_dict())
+
+    def test_classical_belief_update_planner_reroutes_after_topology_change(self) -> None:
+        bundle = load_release_bundle(ROOT_CONFIG)
+        generator = Map2DGenerator(bundle.env2d)
+        base_environment = generator.generate(seed=17, motif_tag="branching_chain").environment
+        intervention = build_intervention("topology", bundle.interventions.families["topology"])
+        transformed_environment = intervention.apply(base_environment, severity=2, seed=99).environment
+
+        stale_config = load_baseline_run_config(STALE_CONFIG)
+        stale = instantiate_baseline(stale_config)
+        stale_context = BaselineContext(model_name=stale.name, exploration_budget_steps=stale_config.exploration_budget_steps, seed=stale_config.seed)
+        stale_exploration = run_exploration(stale, base_environment, stale_context)
+
+        config = load_baseline_run_config(CLASSICAL_CONFIG)
+        model = instantiate_baseline(config)
+        context = BaselineContext(model_name=model.name, exploration_budget_steps=config.exploration_budget_steps, seed=config.seed)
+        exploration = run_exploration(model, base_environment, context)
+        task = PlanningTask(
+            task_type="reroute_after_blockage",
+            horizon_steps=128,
+            family="topology",
+            start_node_id=transformed_environment.start_node_id,
+            goal_node_id=transformed_environment.goal_node_id,
+            goal_token=None,
+            goal_descriptor="reroute to goal",
+        )
+
+        stale_result = run_evaluation(stale, transformed_environment, task, stale_exploration, stale_context)
+        result = run_evaluation(model, transformed_environment, task, exploration, context)
+
+        self.assertGreater(result.metadata["belief_updates"]["edge_update_count"], 0)
+        self.assertGreaterEqual(result.path_efficiency, stale_result.path_efficiency)
+        self.assertTrue(result.metadata["path_still_valid"])
+
+    def test_classical_belief_update_planner_updates_semantic_token_binding(self) -> None:
+        bundle = load_release_bundle(ROOT_CONFIG)
+        generator = Map2DGenerator(bundle.env2d)
+        base_environment = generator.generate(seed=23, motif_tag="two_room_connector").environment
+        intervention = build_intervention("semantic", bundle.interventions.families["semantic"])
+        transformed_environment = intervention.apply(base_environment, severity=2, seed=101).environment
+        changed_token = next(
+            token
+            for token in sorted(base_environment.goal_tokens)
+            if base_environment.goal_tokens[token] != transformed_environment.goal_tokens.get(token)
+        )
+
+        config = load_baseline_run_config(CLASSICAL_CONFIG)
+        model = instantiate_baseline(config)
+        context = BaselineContext(model_name=model.name, exploration_budget_steps=config.exploration_budget_steps, seed=config.seed)
+        exploration = run_exploration(model, base_environment, context)
+        task = InferenceTask(
+            task_type="counterfactual_reachability_query",
+            family="semantic",
+            query=f"Which node does token {changed_token} refer to after the semantic intervention?",
+            expected_output_type="node_id",
+            expected_answer=transformed_environment.goal_tokens[changed_token],
+        )
+
+        result = run_evaluation(model, transformed_environment, task, exploration, context)
+
+        self.assertTrue(result.correct)
+        self.assertEqual(result.predicted_answer, transformed_environment.goal_tokens[changed_token])
+        self.assertGreaterEqual(result.metadata["belief_updates"]["token_update_count"], 1)
 
     @unittest.skipUnless(TORCH_AVAILABLE, "torch is required for learned baseline tests")
     def test_recurrent_wrapper_is_config_driven_and_tracks_parameters(self) -> None:

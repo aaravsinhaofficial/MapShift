@@ -1,0 +1,12 @@
+{
+  "schema_version": "0.1.0",
+  "run_name": "classical_belief_update_planner_mapshift_2d_v0_1",
+  "baseline_name": "classical_belief_update_planner",
+  "seed": 0,
+  "exploration_budget_steps": 800,
+  "parameters": {
+    "planning_update_penalty_per_operation": 0.015,
+    "max_planning_update_penalty": 0.25,
+    "belief_update_policy": "limited_post_intervention_observation"
+  }
+}

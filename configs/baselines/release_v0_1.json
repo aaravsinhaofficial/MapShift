@@ -32,6 +32,12 @@
       "notes": "Sparse relational baseline for embodied structure."
     },
     {
+      "name": "classical_belief_update_planner",
+      "enabled": true,
+      "category": "classical_belief_update",
+      "notes": "Classical occupancy-map baseline that detects local post-intervention mismatches and updates edges, costs, dynamics, and token bindings before replanning."
+    },
+    {
       "name": "prismx_reference_model",
       "enabled": false,
       "category": "reference_structured",

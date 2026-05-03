@@ -6,6 +6,7 @@
     "../calibration/oracle_post_intervention_planner_v0_1.json",
     "../calibration/same_environment_upper_baseline_v0_1.json",
     "../calibration/weak_heuristic_baseline_v0_1.json",
+    "../calibration/classical_belief_update_planner_v0_1.json",
     "../calibration/monolithic_recurrent_world_model_v0_1.json",
     "../calibration/persistent_memory_world_model_v0_1.json",
     "../calibration/relational_graph_world_model_v0_1.json",
