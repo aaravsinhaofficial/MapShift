@@ -41,7 +41,7 @@
       "name": "prismx_reference_model",
       "enabled": false,
       "category": "reference_structured",
-      "notes": "Omitted from the frozen v0.1 main study because this reference model is not implemented."
+      "notes": "Not part of the release artifact because this reference model is not implemented."
     }
   ],
   "sanity_baselines": [

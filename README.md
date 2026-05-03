@@ -532,10 +532,8 @@ scripts/
   run_protocol_comparison.py
 
 docs/
-  benchmark_spec.md
-  release_freeze_v0_1.md
-  evaluation_card.md
-  release_checklist.md
+  README.md          Documentation map and reviewer-facing entry points
+  internal/          Historical planning notes, superseded by this README and configs
 ```
 
 ## Troubleshooting
