@@ -1,2 +1,41 @@
 __pycache__/
 *.pyc
+
+# Python environments and test caches
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# OS/editor files
+.DS_Store
+*.swp
+*.swo
+
+# LaTeX build products. Keep paper.pdf tracked explicitly when needed.
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+
+# Generated benchmark artifacts and local experiment outputs
+outputs/
+outputs_*/
+outputs*/
+checkpoints/
+*.pt
+*.pth
+
+# Packaging/build outputs
+build/
+dist/
+*.egg-info/

@@ -1,0 +1,6 @@
+# Reviewed dependency pins for the NeurIPS E&D artifact path.
+# Python 3.10 or 3.11 is recommended. CUDA-enabled Torch wheels may pull
+# platform-specific NVIDIA packages on Linux; CPU-only reviewers may install
+# an appropriate CPU Torch build first, then run `python -m pip install -e .`.
+numpy==2.2.6
+torch==2.11.0

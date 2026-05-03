@@ -18,7 +18,7 @@ class ReleaseBundleSmokeTests(unittest.TestCase):
 
         self.assertIn("benchmark_name", summary)
         self.assertIn("release_name", summary)
-        self.assertEqual(summary["baseline_count"], 5)
+        self.assertEqual(summary["baseline_count"], 6)
 
     def test_bootstrap_helper_returns_interval(self) -> None:
         point, lower, upper = bootstrap_mean_interval([0.2, 0.4, 0.6, 0.8], resamples=200, seed=7)

@@ -11,6 +11,7 @@ This repository is a self-contained executable artifact. It regenerates benchmar
 | Artifact component | Location or command |
 |---|---|
 | Smoke command | `python3 scripts/build_benchmark.py --tier mapshift_2d --study-config configs/analysis/mapshift_2d_full_study_smoke_v0_1.json --output-dir outputs/releases/mapshift_2d_v0_1_smoke --print-summary` |
+| One-command artifact audit | `python3 scripts/audit_artifact.py --quick --output-dir outputs/audit/mapshift_quick` |
 | Full reproduction command | `python3 scripts/build_benchmark.py --tier mapshift_2d --study-config configs/analysis/mapshift_2d_full_study_v0_1.json --output-dir outputs/releases/mapshift_2d_v0_1_full --print-summary` |
 | Deterministic mechanism diagnostic | `python3 scripts/run_mapshift_2d_study.py configs/analysis/mapshift_2d_belief_update_diagnostic_v0_1.json --print-summary` |
 | Expected runtime | Smoke: minutes on CPU. Deterministic diagnostic: short CPU/GPU run. Full: single-GPU run recommended; the reference NVIDIA L4 run took about 11.5 wall-clock hours. |
@@ -21,6 +22,7 @@ This repository is a self-contained executable artifact. It regenerates benchmar
 | Paper PDF build | `tectonic paper.tex` |
 | Version/config hash | Package version `0.1.0`; schema version `0.1.0`; release manifest records `config_hash`. |
 | Dependency installation | `python3 -m pip install -e .` from a fresh Python 3.10+ environment. |
+| Reviewed dependency pins | `requirements-lock.txt` |
 | Baseline hyperparameters | See `configs/calibration/*.json` and the table below. |
 | Raw record schema | See the "Raw Record Schema" section below. |
 
@@ -38,6 +40,12 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e .
+```
+
+Reviewed-environment pins are provided for reviewers who want a tighter dependency target:
+
+```bash
+python -m pip install -r requirements-lock.txt
 ```
 
 CUDA install:
@@ -74,6 +82,8 @@ If `MAPSHIFT_TORCH_DEVICE` is unset, learned baselines use their config value. T
 
 ## Quick Validation
 
+For the reviewer-facing artifact runbook, see [`ARTIFACT_EVALUATION.md`](ARTIFACT_EVALUATION.md).
+
 Validate the release config bundle:
 
 ```bash
@@ -97,6 +107,16 @@ Run tests:
 ```bash
 python3 -m unittest discover -s tests -p 'test_*.py'
 ```
+
+Run the one-command artifact audit:
+
+```bash
+python3 scripts/audit_artifact.py \
+  --quick \
+  --output-dir outputs/audit/mapshift_quick
+```
+
+The audit validates the release config, runs tests, builds the reviewer smoke artifact, verifies required output paths, checks zero fatal leakage and zero validator failures, and confirms paper-facing rendered outputs exist.
 
 ## Smoke Run
 
@@ -563,3 +583,5 @@ python3 scripts/validate_benchmark.py --tier mapshift_2d configs/benchmark/relea
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+
+Citation metadata is provided in [`CITATION.cff`](CITATION.cff).

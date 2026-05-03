@@ -1,4 +1,4 @@
-"""Top-level package for the frozen MapShift-2D benchmark release."""
+"""Top-level package for the MapShift benchmark release."""
 
 __all__ = ["__version__"]
 

@@ -30,7 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--tier",
         choices=("mapshift_2d", "mapshift_3d", "all"),
         default="all",
-        help="Validation tier. Use mapshift_2d for the frozen 2D artifact path.",
+        help="Validation tier. Use mapshift_2d for the primary artifact path.",
     )
     return parser
 

@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use MapShift, please cite the associated NeurIPS Evaluations & Datasets submission."
+title: "MapShift: Controlled Post-Intervention Evaluation for Embodied Planning"
+authors:
+  - name: "MapShift Authors"
+version: "0.1.0"
+date-released: "2026-05-03"
+license: "MIT"
+repository-code: "https://github.com/aaravsinhaofficial/MapShift"
+keywords:
+  - embodied planning
+  - benchmark
+  - evaluation protocol
+  - world models
+  - post-intervention evaluation
+abstract: "MapShift is an executable benchmark and evaluation protocol for measuring whether exploration-derived environment knowledge remains useful after controlled metric, topology, dynamics, and semantic interventions."

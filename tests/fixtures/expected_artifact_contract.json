@@ -1,0 +1,42 @@
+{
+  "benchmark_version": "0.1.0",
+  "families": [
+    "dynamics",
+    "metric",
+    "semantic",
+    "topology"
+  ],
+  "release_name": "mapshift_2d_v0_1",
+  "required_paper_outputs": [
+    "figures/cep_protocol_diagram.svg",
+    "figures/familywise_main_results.svg",
+    "figures/intervention_examples_2d.svg",
+    "figures/protocol_rank_reversal_comparison.svg",
+    "figures/severity_response_curves.svg",
+    "paper_outputs_manifest.json",
+    "tables/baseline_metadata.md",
+    "tables/benchmark_health_summary.md",
+    "tables/main_familywise_results.md",
+    "tables/protocol_sensitivity_summary.md"
+  ],
+  "required_release_paths": [
+    "configs/benchmark/release_v0_1.json",
+    "health/benchmark_health.json",
+    "logs/build_benchmark.log",
+    "manifests/release_manifest.json",
+    "paper_outputs/paper_outputs_manifest.json",
+    "study/raw/benchmark_health_report.json",
+    "study/raw/cep_report.json",
+    "study/raw/protocol_comparison_report.json",
+    "study/study_bundle.json"
+  ],
+  "smoke_families": [
+    "metric",
+    "semantic"
+  ],
+  "task_classes": [
+    "adaptation",
+    "inference",
+    "planning"
+  ]
+}

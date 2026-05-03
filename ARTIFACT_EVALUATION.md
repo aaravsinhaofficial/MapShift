@@ -1,0 +1,163 @@
+# MapShift Artifact Evaluation Guide
+
+This guide is the shortest path for reviewers to verify that the MapShift code artifact is installable, executable, and able to regenerate the paper-facing outputs. The artifact is an executable benchmark/generator, not a hosted static dataset.
+
+## Environment
+
+Use Python 3.10 or newer. A CPU environment is sufficient for validation, unit tests, the reviewer smoke build, and the deterministic mechanism diagnostic. A CUDA-capable PyTorch install is recommended for the full reproduction run.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
+
+Optional reviewed-environment pins are provided in `requirements-lock.txt`:
+
+```bash
+python -m pip install -r requirements-lock.txt
+```
+
+For CUDA runs, verify PyTorch sees the GPU:
+
+```bash
+python3 - <<'PY'
+import torch
+print("torch:", torch.__version__)
+print("cuda_available:", torch.cuda.is_available())
+print("device_count:", torch.cuda.device_count())
+print("device_0:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else None)
+PY
+```
+
+To force learned baselines onto a GPU and isolate checkpoints:
+
+```bash
+export MAPSHIFT_TORCH_DEVICE=cuda:0
+export MAPSHIFT_CHECKPOINT_DIR=/tmp/mapshift_learned_baselines_review
+```
+
+## One-Command Audit
+
+The quick audit validates configs, runs tests, builds the reviewer smoke artifact, checks the generated manifest, verifies benchmark-health gates, and renders paper-facing outputs:
+
+```bash
+python3 scripts/audit_artifact.py --quick --output-dir outputs/audit/mapshift_quick
+```
+
+Expected result: the command exits with status 0 and prints `Artifact audit passed`.
+
+## Reviewer Smoke Build
+
+The smoke build is the main low-cost artifact check:
+
+```bash
+python3 scripts/build_benchmark.py \
+  --tier mapshift_2d \
+  --study-config configs/analysis/mapshift_2d_full_study_smoke_v0_1.json \
+  --output-dir outputs/releases/mapshift_2d_v0_1_smoke \
+  --print-summary
+```
+
+Expected runtime: minutes on a laptop or CPU VM. It writes:
+
+```text
+outputs/releases/mapshift_2d_v0_1_smoke/
+  logs/build_benchmark.log
+  health/benchmark_health.json
+  study/study_bundle.json
+  study/raw/cep_report.json
+  study/raw/protocol_comparison_report.json
+  study/tables/*.json
+  paper_outputs/tables/*.md
+  paper_outputs/figures/*.svg
+  manifests/release_manifest.json
+```
+
+## Deterministic Mechanism Diagnostic
+
+This run reproduces the stale-map, weak-heuristic, and classical belief-update diagnostic reported in the paper:
+
+```bash
+python3 scripts/run_mapshift_2d_study.py \
+  configs/analysis/mapshift_2d_belief_update_diagnostic_v0_1.json \
+  --print-summary
+```
+
+Expected output directory:
+
+```text
+outputs/studies/mapshift_2d_belief_update_diagnostic_v0_1/
+```
+
+Inspect the reported diagnostic:
+
+```bash
+python3 - <<'PY'
+import json
+from pathlib import Path
+
+b = json.loads(Path("outputs/studies/mapshift_2d_belief_update_diagnostic_v0_1/study_bundle.json").read_text())
+print(json.dumps(b["proposition_support"], indent=2))
+for row in b["raw_reports"]["cep_report"]["familywise_summary"]["rows"]:
+    print(row["baseline_name"], row["family"], round(row["family_primary_score"], 3))
+PY
+```
+
+## Full Reproduction
+
+The full run regenerates the paper-facing tables, figures, raw records, protocol comparisons, benchmark health reports, and provenance manifest:
+
+```bash
+python3 scripts/build_benchmark.py \
+  --tier mapshift_2d \
+  --study-config configs/analysis/mapshift_2d_full_study_v0_1.json \
+  --output-dir outputs/releases/mapshift_2d_v0_1_full \
+  --print-summary
+```
+
+Expected runtime: the completed reference run used one NVIDIA L4 GPU with 23GB memory and took about 11.5 wall-clock hours. CPU-only full reproduction is possible but not recommended for deadline-sensitive review.
+
+Monitor progress:
+
+```bash
+tail -f outputs/releases/mapshift_2d_v0_1_full/logs/build_benchmark.log
+grep -c "evaluating family=" outputs/releases/mapshift_2d_v0_1_full/logs/build_benchmark.log
+```
+
+The full config runs one primary CEP sweep plus four protocol-comparison sweeps. Each sweep has 8 motifs x 4 families, so a completed run logs roughly 160 `evaluating family=` chunks.
+
+## Paper Output Mapping
+
+| Paper item | Reproducible source |
+|---|---|
+| Benchmark health table | `outputs/releases/mapshift_2d_v0_1_full/study/tables/benchmark_health_summary.json` |
+| Main family-wise results | `outputs/releases/mapshift_2d_v0_1_full/study/tables/familywise_main_results.json` |
+| Full-run protocol sensitivity | `outputs/releases/mapshift_2d_v0_1_full/study/tables/protocol_sensitivity_and_rank_correlation.json` |
+| Severity-response curves | `outputs/releases/mapshift_2d_v0_1_full/study/tables/severity_response.json` and `paper_outputs/figures/severity_response_curves.svg` |
+| Deterministic mechanism diagnostic | `outputs/studies/mapshift_2d_belief_update_diagnostic_v0_1/study_bundle.json` |
+| Raw episode records | `study/raw/cep_report.json` and `study/raw/protocol_comparison_report.json` |
+| Rendered tables/figures | `outputs/releases/<run_name>/paper_outputs/` |
+
+Regenerate rendered Markdown/SVG outputs from an existing bundle:
+
+```bash
+python3 scripts/render_paper_outputs.py \
+  outputs/releases/mapshift_2d_v0_1_full/study/study_bundle.json \
+  --output-dir outputs/releases/mapshift_2d_v0_1_full/paper_outputs \
+  --print-summary
+```
+
+## Health Gates
+
+A valid artifact run should report:
+
+- split validation ok
+- fatal leakage count 0
+- benchmark-health validator failures 0
+- task coverage present for all configured cells
+- oracle solvability reported in the health summary
+- paper-facing tables and figures rendered
+
+If a full run differs numerically across platforms, compare the generated `manifests/release_manifest.json`, `study/study_bundle.json`, and `logs/build_benchmark.log` to identify config, seed, dependency, or device changes.
