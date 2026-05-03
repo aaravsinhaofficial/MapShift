@@ -14,12 +14,12 @@ This repository is a self-contained executable artifact. It regenerates benchmar
 | One-command artifact audit | `python3 scripts/audit_artifact.py --quick --output-dir outputs/audit/mapshift_quick` |
 | Full reproduction command | `python3 scripts/build_benchmark.py --tier mapshift_2d --study-config configs/analysis/mapshift_2d_full_study_v0_1.json --output-dir outputs/releases/mapshift_2d_v0_1_full --print-summary` |
 | Deterministic mechanism diagnostic | `python3 scripts/run_mapshift_2d_study.py configs/analysis/mapshift_2d_belief_update_diagnostic_v0_1.json --print-summary` |
+| High-capacity world-model add-on | `python3 scripts/generate_calibration_report.py configs/benchmark/release_v0_1.json --tier mapshift_2d --run-config configs/calibration/pretrained_structured_graph_world_model_v0_1.json --model-seed 0 --model-seed 1 --model-seed 2 --samples-per-motif 1 --task-samples-per-class 3 --output outputs/studies/pretrained_structured_graph_world_model_v0_1/cep_report.json --log-file outputs/studies/pretrained_structured_graph_world_model_v0_1/logs/run.log --print-summary` |
 | Expected runtime | Smoke: minutes on CPU. Deterministic diagnostic: short CPU/GPU run. Full: single-GPU run recommended; the reference NVIDIA L4 run took about 11.5 wall-clock hours. |
 | CPU/GPU requirements | CPU works for validation and smoke. Full study works on CPU but is intended for a CUDA-capable PyTorch install when available. |
 | Disk usage | Reserve 5GB for generated outputs and checkpoints; reserve more if installing CUDA PyTorch wheels into a fresh environment. |
 | Output paths | `outputs/releases/<run_name>/health`, `study`, `paper_outputs`, `manifests`, and `logs`. |
 | Tables/figures regenerate | `python3 scripts/render_paper_outputs.py <study_bundle.json> --output-dir <paper_outputs> --print-summary` |
-| Paper PDF build | `tectonic paper.tex` |
 | Version/config hash | Package version `0.1.0`; schema version `0.1.0`; release manifest records `config_hash`. |
 | Dependency installation | `python3 -m pip install -e .` from a fresh Python 3.10+ environment. |
 | Reviewed dependency pins | `requirements-lock.txt` |
@@ -308,13 +308,80 @@ for name, comp in b["protocol_sensitivity"]["pairwise_comparisons"].items():
 PY
 ```
 
-Build the submitted PDF after regenerating outputs:
+## High-Capacity Learned World-Model Add-On
+
+The main full-study artifact leaves the original baseline roster unchanged. To add the higher-capacity learned row without recomputing the older baselines, run a CEP-only calibration report for the pretrained structured graph world model. The model has 223,174 trainable parameters with the default config and is expanded over three model seeds.
+
+On a CUDA host:
 
 ```bash
-tectonic paper.tex
+export MAPSHIFT_TORCH_DEVICE=cuda:0
+export MAPSHIFT_CHECKPOINT_DIR=/tmp/mapshift_pretrained_graph_world_model_v0_1
+
+python3 scripts/generate_calibration_report.py \
+  configs/benchmark/release_v0_1.json \
+  --tier mapshift_2d \
+  --run-config configs/calibration/pretrained_structured_graph_world_model_v0_1.json \
+  --model-seed 0 \
+  --model-seed 1 \
+  --model-seed 2 \
+  --samples-per-motif 1 \
+  --task-samples-per-class 3 \
+  --output outputs/studies/pretrained_structured_graph_world_model_v0_1/cep_report.json \
+  --log-file outputs/studies/pretrained_structured_graph_world_model_v0_1/logs/run.log \
+  --print-summary
 ```
 
-The paper source is `paper.tex`, citations are in `paper.bib`, and the NeurIPS style file is `neurips_2026.sty`.
+This command trains one global pretrained world model per seed across generated train motifs, evaluates only that learned baseline on the CEP grid, and leaves all previously reported baselines untouched. The evaluator also runs an implicit oracle reference internally to populate oracle fields, so the output includes an oracle row; use the `pretrained_structured_graph_world_model` rows for the append-only learned-baseline table entry.
+
+Expected output:
+
+```text
+outputs/studies/pretrained_structured_graph_world_model_v0_1/
+  cep_report.json
+  logs/run.log
+```
+
+Expected scale: 8 motifs x 4 families x 4 severities x 3 task classes x 3 task samples. With three model seeds, the learned baseline contributes 3456 episode records; the implicit oracle contributes 1152 reference records. This is substantially shorter than the full 11.5-hour L4 reproduction because it skips the older baselines and protocol-comparison sweeps.
+
+Extract the family-wise scores for the new row:
+
+```bash
+python3 - <<'PY'
+import json
+from pathlib import Path
+
+p = Path("outputs/studies/pretrained_structured_graph_world_model_v0_1/cep_report.json")
+report = json.loads(p.read_text())
+rows = report["familywise_summary"]["rows"]
+for row in rows:
+    if row["baseline_name"] == "pretrained_structured_graph_world_model":
+        print(
+            row["baseline_name"],
+            row["family"],
+            "episodes=", row["episode_count"],
+            "score=", round(row["family_primary_score"], 3),
+        )
+PY
+```
+
+Inspect trainable parameter count and device metadata:
+
+```bash
+python3 - <<'PY'
+import json
+from pathlib import Path
+
+p = Path("outputs/studies/pretrained_structured_graph_world_model_v0_1/cep_report.json")
+metadata = json.loads(p.read_text())["baseline_metadata"]["pretrained_structured_graph_world_model"]
+print("parameter_count_min:", metadata["parameter_count_min"])
+print("parameter_count_max:", metadata["parameter_count_max"])
+for run_name, run in sorted(metadata["runs"].items()):
+    print(run_name, "seed=", run["seed"], "device=", run.get("torch_device_resolved"))
+PY
+```
+
+The submitted `paper.pdf` is built from the author manuscript and is not required to execute the artifact. The commands above regenerate the data products used to fill the paper tables.
 
 ## Regenerating Tables and Figures
 
@@ -383,7 +450,7 @@ PY
 
 ## Baselines and Hyperparameters
 
-The main study uses eight scientific baseline classes. Deterministic reference and classical baselines have no trainable parameters.
+The main full study uses eight scientific baseline classes. Deterministic reference and classical baselines have no trainable parameters. The high-capacity pretrained structured graph world model is an append-only learned baseline that can be evaluated separately with the command above.
 
 | Baseline | Config | Key hyperparameters |
 |---|---|---|
@@ -395,8 +462,9 @@ The main study uses eight scientific baseline classes. Deterministic reference a
 | `persistent_memory_world_model` | `configs/calibration/persistent_memory_world_model_v0_1.json` | 16 memory slots, slot stride 3, readout width 8, 8 epochs, lr 0.01, max rollout 8 |
 | `relational_graph_world_model` | `configs/calibration/relational_graph_world_model_v0_1.json` | hidden size 10, 2 message-passing steps, 10 epochs, lr 0.01 |
 | `structured_dynamics_world_model` | `configs/calibration/structured_dynamics_world_model_v0_1.json` | geometry width 10, dynamics width 6, 10 epochs, lr 0.01 |
+| `pretrained_structured_graph_world_model` | `configs/calibration/pretrained_structured_graph_world_model_v0_1.json` | 223,174 trainable parameters; hidden size 128, 4 message-passing steps, pair width 128, dynamics width 64, 60 epochs, lr 0.001, batch size 32, 2000 generated train environments, 400 generated validation environments, evaluated with 3 seeds in the append-only run |
 
-Learned baselines train separately for each base environment and model seed from the reward-free exploration trace. They are not pretrained across environments. The full study expands learned baselines over seeds `[0, 1, 2, 3, 4]` using `configs/analysis/mapshift_2d_full_study_v0_1.json`.
+Except for `pretrained_structured_graph_world_model`, learned baselines train separately for each base environment and model seed from the reward-free exploration trace and are not pretrained across environments. The full study expands the original learned baselines over seeds `[0, 1, 2, 3, 4]` using `configs/analysis/mapshift_2d_full_study_v0_1.json`; the append-only pretrained baseline is evaluated over seeds `[0, 1, 2]` with the command above.
 
 For a faster deterministic diagnostic that isolates stale maps, local heuristics, and explicit belief updates, run:
 

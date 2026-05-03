@@ -25,12 +25,14 @@ _KNOWN_BASELINE_TIERS: dict[str, tuple[str, ...]] = {
     "persistent_memory_world_model": ("mapshift_2d",),
     "relational_graph_world_model": ("mapshift_2d",),
     "structured_dynamics_world_model": ("mapshift_2d",),
+    "pretrained_structured_graph_world_model": ("mapshift_2d",),
 }
 _TORCH_OPTIONAL_BASELINES = {
     "monolithic_recurrent_world_model",
     "persistent_memory_world_model",
     "relational_graph_world_model",
     "structured_dynamics_world_model",
+    "pretrained_structured_graph_world_model",
 }
 
 
@@ -186,7 +188,7 @@ def _ensure_builtin_registrations() -> None:
 
     from . import heuristic, oracle  # noqa: F401
 
-    for module_name in ("memory", "recurrent", "relational", "structured_dynamics"):
+    for module_name in ("memory", "pretrained_graph", "recurrent", "relational", "structured_dynamics"):
         try:
             __import__(f"{__package__}.{module_name}", fromlist=[module_name])
         except ModuleNotFoundError as exc:

@@ -38,6 +38,12 @@
       "notes": "Classical occupancy-map baseline that detects local post-intervention mismatches and updates edges, costs, dynamics, and token bindings before replanning."
     },
     {
+      "name": "pretrained_structured_graph_world_model",
+      "enabled": true,
+      "category": "pretrained_structured_graph",
+      "notes": "Higher-capacity structured graph world model pretrained across generated train motifs and evaluated as an append-only learned baseline."
+    },
+    {
       "name": "prismx_reference_model",
       "enabled": false,
       "category": "reference_structured",

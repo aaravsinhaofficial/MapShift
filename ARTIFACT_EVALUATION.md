@@ -105,6 +105,44 @@ for row in b["raw_reports"]["cep_report"]["familywise_summary"]["rows"]:
 PY
 ```
 
+## High-Capacity Learned World-Model Add-On
+
+This optional add-on evaluates only the higher-capacity pretrained structured graph world model on the CEP grid, expanded over three model seeds. It does not rerun the older baselines. An implicit oracle reference is still evaluated internally so oracle fields in the raw records remain populated.
+
+```bash
+export MAPSHIFT_TORCH_DEVICE=cuda:0
+export MAPSHIFT_CHECKPOINT_DIR=/tmp/mapshift_pretrained_graph_world_model_v0_1
+
+python3 scripts/generate_calibration_report.py \
+  configs/benchmark/release_v0_1.json \
+  --tier mapshift_2d \
+  --run-config configs/calibration/pretrained_structured_graph_world_model_v0_1.json \
+  --model-seed 0 \
+  --model-seed 1 \
+  --model-seed 2 \
+  --samples-per-motif 1 \
+  --task-samples-per-class 3 \
+  --output outputs/studies/pretrained_structured_graph_world_model_v0_1/cep_report.json \
+  --log-file outputs/studies/pretrained_structured_graph_world_model_v0_1/logs/run.log \
+  --print-summary
+```
+
+Expected scale: the learned model contributes 3456 episode records. The implicit oracle contributes 1152 additional reference records. The default model config has 223,174 trainable parameters.
+
+Extract the family-wise learned-baseline row:
+
+```bash
+python3 - <<'PY'
+import json
+from pathlib import Path
+
+p = Path("outputs/studies/pretrained_structured_graph_world_model_v0_1/cep_report.json")
+for row in json.loads(p.read_text())["familywise_summary"]["rows"]:
+    if row["baseline_name"] == "pretrained_structured_graph_world_model":
+        print(row["baseline_name"], row["family"], round(row["family_primary_score"], 3), "episodes=", row["episode_count"])
+PY
+```
+
 ## Full Reproduction
 
 The full run regenerates the paper-facing tables, figures, raw records, protocol comparisons, benchmark health reports, and provenance manifest:
@@ -137,6 +175,7 @@ The full config runs one primary CEP sweep plus four protocol-comparison sweeps.
 | Full-run protocol sensitivity | `outputs/releases/mapshift_2d_v0_1_full/study/tables/protocol_sensitivity_and_rank_correlation.json` |
 | Severity-response curves | `outputs/releases/mapshift_2d_v0_1_full/study/tables/severity_response.json` and `paper_outputs/figures/severity_response_curves.svg` |
 | Deterministic mechanism diagnostic | `outputs/studies/mapshift_2d_belief_update_diagnostic_v0_1/study_bundle.json` |
+| High-capacity learned add-on | `outputs/studies/pretrained_structured_graph_world_model_v0_1/cep_report.json` |
 | Raw episode records | `study/raw/cep_report.json` and `study/raw/protocol_comparison_report.json` |
 | Rendered tables/figures | `outputs/releases/<run_name>/paper_outputs/` |
 

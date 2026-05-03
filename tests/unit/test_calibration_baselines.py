@@ -6,8 +6,9 @@ from unittest.mock import patch
 from pathlib import Path
 
 from mapshift.baselines import instantiate_baseline, load_baseline_run_config
-from mapshift.baselines.api import BaselineContext, BaselineRunConfig
+from mapshift.baselines.api import BaselineContext, BaselineRunConfig, deterministic_exploration_trace
 from mapshift.baselines.learned_common import resolve_torch_device
+from mapshift.baselines.learned_graph import build_graph_training_data
 from mapshift.core.schemas import load_release_bundle
 from mapshift.envs.map2d.dynamics import DynamicsParameters2D
 from mapshift.envs.map2d.generator import Map2DGenerator
@@ -29,6 +30,7 @@ RECURRENT_CONFIG = REPO_ROOT / "configs" / "calibration" / "monolithic_recurrent
 MEMORY_CONFIG = REPO_ROOT / "configs" / "calibration" / "persistent_memory_world_model_v0_1.json"
 RELATIONAL_CONFIG = REPO_ROOT / "configs" / "calibration" / "relational_graph_world_model_v0_1.json"
 STRUCTURED_CONFIG = REPO_ROOT / "configs" / "calibration" / "structured_dynamics_world_model_v0_1.json"
+PRETRAINED_GRAPH_CONFIG = REPO_ROOT / "configs" / "calibration" / "pretrained_structured_graph_world_model_v0_1.json"
 TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 
 
@@ -301,6 +303,25 @@ class CalibrationBaselineTests(unittest.TestCase):
         self.assertEqual(model.parameter_count, model.trainable_parameter_count)
         self.assertTrue(model.describe()["learnable"])
         self.assertEqual(model.describe()["parameters"]["geometry_width"], 10)
+        self.assertIn(model.describe()["torch_device_resolved"], {"cpu", "cuda:0"})
+
+    @unittest.skipUnless(TORCH_AVAILABLE, "torch is required for learned baseline tests")
+    def test_pretrained_structured_graph_wrapper_builds_200k_class_model(self) -> None:
+        bundle = load_release_bundle(ROOT_CONFIG)
+        generator = Map2DGenerator(bundle.env2d)
+        environment = generator.generate(seed=13, motif_tag="simple_loop").environment
+        _, visited_node_ids = deterministic_exploration_trace(environment, 800, 0)
+        graph_data = build_graph_training_data(environment, visited_node_ids)
+        config = load_baseline_run_config(PRETRAINED_GRAPH_CONFIG)
+        model = instantiate_baseline(config)
+
+        model.build_model(graph_data)
+
+        self.assertEqual(model.name, "pretrained_structured_graph_world_model")
+        self.assertGreaterEqual(model.parameter_count, 200_000)
+        self.assertLess(model.parameter_count, 250_000)
+        self.assertEqual(model.parameter_count, model.trainable_parameter_count)
+        self.assertEqual(model.describe()["parameters"]["pretrain_train_environments"], 2000)
         self.assertIn(model.describe()["torch_device_resolved"], {"cpu", "cuda:0"})
 
     @unittest.skipUnless(TORCH_AVAILABLE, "torch is required for learned baseline tests")
