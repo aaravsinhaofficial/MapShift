@@ -82,7 +82,7 @@ If `MAPSHIFT_TORCH_DEVICE` is unset, learned baselines use their config value. T
 
 ## Quick Validation
 
-For the reviewer-facing artifact runbook, see [`ARTIFACT_EVALUATION.md`](ARTIFACT_EVALUATION.md).
+For the artifact runbook, see [`ARTIFACT_EVALUATION.md`](ARTIFACT_EVALUATION.md).
 
 Validate the release config bundle:
 
