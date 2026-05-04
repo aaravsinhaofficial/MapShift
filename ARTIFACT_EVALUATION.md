@@ -105,6 +105,27 @@ for row in b["raw_reports"]["cep_report"]["familywise_summary"]["rows"]:
 PY
 ```
 
+Generate the held-out consistency and paired-bootstrap delta tables for the stale-map versus belief-update claims:
+
+```bash
+python3 scripts/analyze_mechanism_diagnostic.py \
+  outputs/studies/mapshift_2d_belief_update_diagnostic_v0_1/study_bundle.json \
+  --output-dir outputs/studies/mapshift_2d_belief_update_diagnostic_v0_1/mechanism_diagnostic_analysis \
+  --split test \
+  --family topology \
+  --family semantic \
+  --resamples 1000 \
+  --print-summary
+```
+
+The key outputs are:
+
+```text
+mechanism_diagnostic_analysis/tables/heldout_motif_summary.md
+mechanism_diagnostic_analysis/tables/heldout_motif_consistency.md
+mechanism_diagnostic_analysis/tables/paired_delta_bootstrap.md
+```
+
 ## High-Capacity Learned World-Model Add-On
 
 This optional add-on evaluates only the 1.14M-parameter pretrained structured graph world model on the CEP grid. It does not rerun the older baselines. An implicit oracle reference is still evaluated internally so oracle fields in the raw records remain populated. The generated report contains all severities; the paper table reports the non-identity subset for this high-capacity learned row.

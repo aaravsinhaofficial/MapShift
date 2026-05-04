@@ -308,6 +308,33 @@ for name, comp in b["protocol_sensitivity"]["pairwise_comparisons"].items():
 PY
 ```
 
+After the 24-motif deterministic diagnostic finishes, generate the held-out motif consistency table and paired-bootstrap delta CIs used for the central stale-map versus belief-update claims:
+
+```bash
+python3 scripts/analyze_mechanism_diagnostic.py \
+  outputs/studies/mapshift_2d_belief_update_diagnostic_v0_1_24motif/study_bundle.json \
+  --output-dir outputs/studies/mapshift_2d_belief_update_diagnostic_v0_1_24motif/mechanism_diagnostic_analysis \
+  --split test \
+  --family topology \
+  --family semantic \
+  --resamples 1000 \
+  --print-summary
+```
+
+This writes:
+
+```text
+mechanism_diagnostic_analysis/p2_p3_summary.json
+mechanism_diagnostic_analysis/tables/heldout_motif_consistency.json
+mechanism_diagnostic_analysis/tables/heldout_motif_consistency.md
+mechanism_diagnostic_analysis/tables/heldout_motif_summary.json
+mechanism_diagnostic_analysis/tables/heldout_motif_summary.md
+mechanism_diagnostic_analysis/tables/paired_delta_bootstrap.json
+mechanism_diagnostic_analysis/tables/paired_delta_bootstrap.md
+```
+
+The held-out consistency table reports, per test motif and family, `BeliefUpdate - StaleMap` under CEP and same-environment evaluation, plus protocol deltas for each method. The paired-bootstrap table reports 95% CIs for `BeliefUpdate_CEP - StaleMap_CEP`, `BeliefUpdate_same_env - StaleMap_same_env`, and the protocol-reversal contrast `(BeliefUpdate_CEP - StaleMap_CEP) - (BeliefUpdate_same_env - StaleMap_same_env)`.
+
 ## High-Capacity Learned World-Model Add-On
 
 The main full-study artifact leaves the original baseline roster unchanged. To add the higher-capacity learned row without recomputing the older baselines, run a CEP-only calibration report for the 1.14M-parameter pretrained structured graph world model. The generated report contains all severities; the paper table reports the non-identity severity subset for this row.
