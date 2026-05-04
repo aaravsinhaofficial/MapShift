@@ -209,6 +209,53 @@ outputs/releases/mapshift_2d_v0_1_full/paper_outputs/figures/severity_response_c
 outputs/releases/mapshift_2d_v0_1_full/paper_outputs/figures/protocol_rank_reversal_comparison.svg
 ```
 
+## Deadline-Friendly Study Runs
+
+The complete `mapshift_2d_full_study_v0_1` configuration runs the full baseline roster under five protocol variants. When wall-clock time is constrained, use two grid-aligned runs instead:
+
+1. A CEP-only full-roster run for the main family-wise results table.
+2. A deterministic full-protocol diagnostic for stale-map, weak-heuristic, and belief-update protocol sensitivity.
+
+This preserves the 24 structural motifs, 10/6/8 split, all four intervention families, all severity levels, and the full task mix, while avoiding five repeated full-roster sweeps.
+
+CEP-only full-roster run:
+
+```bash
+export MAPSHIFT_TORCH_DEVICE=cuda:0
+export MAPSHIFT_CHECKPOINT_DIR=/tmp/mapshift_learned_baselines_cep_only_v0_1
+
+python3 scripts/build_benchmark.py \
+  --tier mapshift_2d \
+  --study-config configs/analysis/mapshift_2d_main_cep_only_v0_1.json \
+  --output-dir outputs/releases/mapshift_2d_v0_1_cep_only \
+  --print-summary
+```
+
+Deterministic full-protocol diagnostic:
+
+```bash
+python3 scripts/run_mapshift_2d_study.py \
+  configs/analysis/mapshift_2d_belief_update_diagnostic_full_protocols_v0_1.json \
+  --output-dir outputs/studies/mapshift_2d_belief_update_diagnostic_full_protocols_v0_1 \
+  --log-file outputs/studies/mapshift_2d_belief_update_diagnostic_full_protocols_v0_1/logs/run.log \
+  --print-summary
+```
+
+Then generate held-out motif and paired-bootstrap delta tables:
+
+```bash
+python3 scripts/analyze_mechanism_diagnostic.py \
+  outputs/studies/mapshift_2d_belief_update_diagnostic_full_protocols_v0_1/study_bundle.json \
+  --output-dir outputs/studies/mapshift_2d_belief_update_diagnostic_full_protocols_v0_1/mechanism_diagnostic_analysis \
+  --split test \
+  --family topology \
+  --family semantic \
+  --resamples 1000 \
+  --print-summary
+```
+
+The CEP-only run has about 96 logged family chunks instead of the full run's 480. The deterministic diagnostic has the same 480 family chunks but only four deterministic/reference methods and no learned baseline training, so it is much cheaper than the full-roster protocol sweep.
+
 ## Reproducing Paper Claims
 
 The paper's empirical claims come from two executable study paths. The submitted `paper.pdf` contains the publication figures; the artifact also regenerates code-produced protocol and intervention-example SVGs for reviewer inspection.
