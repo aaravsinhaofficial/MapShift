@@ -24,22 +24,54 @@
     "offset_bottleneck",
     "nested_bottleneck",
     "deceptive_shortcut",
-    "disconnected_subregion"
+    "disconnected_subregion",
+    "spiral_loop",
+    "ladder_loop",
+    "double_connector_rooms",
+    "zigzag_chain",
+    "forked_bottleneck",
+    "hub_spoke_deadends",
+    "parallel_corridor",
+    "ring_with_tail",
+    "offset_loop_bridge",
+    "split_hallway",
+    "braided_shortcut",
+    "narrow_gate_cluster",
+    "cul_de_sac_shortcut",
+    "island_bridge",
+    "broken_bridge_islands",
+    "asymmetric_loop_chain"
   ],
   "splits": {
     "train_motifs": [
       "simple_loop",
       "two_room_connector",
-      "branching_chain"
+      "branching_chain",
+      "spiral_loop",
+      "ladder_loop",
+      "double_connector_rooms",
+      "zigzag_chain",
+      "forked_bottleneck",
+      "hub_spoke_deadends",
+      "parallel_corridor"
     ],
     "val_motifs": [
       "asymmetric_multi_room_chain",
-      "offset_bottleneck"
+      "offset_bottleneck",
+      "ring_with_tail",
+      "offset_loop_bridge",
+      "split_hallway",
+      "braided_shortcut"
     ],
     "test_motifs": [
       "nested_bottleneck",
       "deceptive_shortcut",
-      "disconnected_subregion"
+      "disconnected_subregion",
+      "narrow_gate_cluster",
+      "cul_de_sac_shortcut",
+      "island_bridge",
+      "broken_bridge_islands",
+      "asymmetric_loop_chain"
     ]
   },
   "exploration": {

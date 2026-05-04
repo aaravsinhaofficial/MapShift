@@ -107,25 +107,25 @@ PY
 
 ## High-Capacity Learned World-Model Add-On
 
-This optional add-on evaluates only the larger pilot pretrained structured graph world model on the CEP grid. It does not rerun the older baselines. An implicit oracle reference is still evaluated internally so oracle fields in the raw records remain populated. The generated report contains all severities; the paper table reports the non-identity subset for this larger pilot row.
+This optional add-on evaluates only the 1.14M-parameter pretrained structured graph world model on the CEP grid. It does not rerun the older baselines. An implicit oracle reference is still evaluated internally so oracle fields in the raw records remain populated. The generated report contains all severities; the paper table reports the non-identity subset for this high-capacity learned row.
 
 ```bash
 export MAPSHIFT_TORCH_DEVICE=cuda:0
-export MAPSHIFT_CHECKPOINT_DIR=/tmp/mapshift_pretrained_graph_world_model_large_pilot_v0_1
+export MAPSHIFT_CHECKPOINT_DIR=/tmp/mapshift_pretrained_graph_world_model_1m_v0_1
 
 python3 scripts/generate_calibration_report.py \
   configs/benchmark/release_v0_1.json \
   --tier mapshift_2d \
-  --run-config configs/calibration/pretrained_structured_graph_world_model_large_pilot_v0_1.json \
+  --run-config configs/calibration/pretrained_structured_graph_world_model_1m_v0_1.json \
   --model-seed 0 \
   --samples-per-motif 1 \
   --task-samples-per-class 3 \
-  --output outputs/studies/pretrained_structured_graph_world_model_large_pilot_v0_1/cep_report.json \
-  --log-file outputs/studies/pretrained_structured_graph_world_model_large_pilot_v0_1/logs/run.log \
+  --output outputs/studies/pretrained_structured_graph_world_model_1m_v0_1/cep_report.json \
+  --log-file outputs/studies/pretrained_structured_graph_world_model_1m_v0_1/logs/run.log \
   --print-summary
 ```
 
-Expected scale: the learned model contributes 1152 all-severity episode records, of which 864 are non-identity severity episodes used for the paper row. The implicit oracle contributes 1152 additional reference records. The larger pilot config has approximately 1.14M trainable parameters.
+Expected scale: the learned model contributes 3456 all-severity episode records, of which 2592 are non-identity severity episodes used for the paper row. The implicit oracle contributes 3456 additional reference records. The high-capacity config has approximately 1.14M trainable parameters.
 
 Extract the family-wise learned-baseline row:
 
@@ -136,7 +136,7 @@ from pathlib import Path
 
 from mapshift.runners.evaluate import EvaluationRecord, _aggregate_metric_rows, _long_horizon_threshold
 
-p = Path("outputs/studies/pretrained_structured_graph_world_model_large_pilot_v0_1/cep_report.json")
+p = Path("outputs/studies/pretrained_structured_graph_world_model_1m_v0_1/cep_report.json")
 payload = json.loads(p.read_text())
 records = [
     EvaluationRecord(**{**record, "adaptation_curve": tuple(record.get("adaptation_curve", ()))})
@@ -161,7 +161,7 @@ python3 scripts/build_benchmark.py \
   --print-summary
 ```
 
-Expected runtime: the completed reference run used one NVIDIA L4 GPU with 23GB memory and took about 11.5 wall-clock hours. CPU-only full reproduction is possible but not recommended for deadline-sensitive review.
+Expected runtime: the expanded full study should be budgeted at roughly 30-36 wall-clock hours on one NVIDIA L4 GPU with 23GB memory, with faster completion expected on L40S/H100-class GPUs. CPU-only full reproduction is possible but not recommended for deadline-sensitive review.
 
 Monitor progress:
 
@@ -170,7 +170,7 @@ tail -f outputs/releases/mapshift_2d_v0_1_full/logs/build_benchmark.log
 grep -c "evaluating family=" outputs/releases/mapshift_2d_v0_1_full/logs/build_benchmark.log
 ```
 
-The full config runs one primary CEP sweep plus four protocol-comparison sweeps. Each sweep has 8 motifs x 4 families, so a completed run logs roughly 160 `evaluating family=` chunks.
+The full config runs one primary CEP sweep plus four protocol-comparison sweeps. Each sweep has 24 motifs x 4 families, so a completed run logs roughly 480 `evaluating family=` chunks.
 
 ## Paper Output Mapping
 
@@ -181,7 +181,7 @@ The full config runs one primary CEP sweep plus four protocol-comparison sweeps.
 | Full-run protocol sensitivity | `outputs/releases/mapshift_2d_v0_1_full/study/tables/protocol_sensitivity_and_rank_correlation.json` |
 | Severity-response curves | `outputs/releases/mapshift_2d_v0_1_full/study/tables/severity_response.json` and `paper_outputs/figures/severity_response_curves.svg` |
 | Deterministic mechanism diagnostic | `outputs/studies/mapshift_2d_belief_update_diagnostic_v0_1/study_bundle.json` |
-| High-capacity learned add-on | `outputs/studies/pretrained_structured_graph_world_model_large_pilot_v0_1/cep_report.json` |
+| High-capacity learned add-on | `outputs/studies/pretrained_structured_graph_world_model_1m_v0_1/cep_report.json` |
 | Raw episode records | `study/raw/cep_report.json` and `study/raw/protocol_comparison_report.json` |
 | Rendered tables/figures | `outputs/releases/<run_name>/paper_outputs/` |
 

@@ -101,9 +101,9 @@ class SplitControlTests(unittest.TestCase):
         second = build_canonical_release_split_bundle(bundle, sample_count_per_motif=1, task_samples_per_class=1)
 
         self.assertEqual(first.to_dict(), second.to_dict())
-        self.assertEqual(len(first.manifests["train"].environment_ids), 3)
-        self.assertEqual(len(first.manifests["val"].environment_ids), 2)
-        self.assertEqual(len(first.manifests["test"].environment_ids), 3)
+        self.assertEqual(len(first.manifests["train"].environment_ids), 10)
+        self.assertEqual(len(first.manifests["val"].environment_ids), 6)
+        self.assertEqual(len(first.manifests["test"].environment_ids), 8)
 
     def test_leakage_report_detects_duplicate_environment_entries(self) -> None:
         entry = {
@@ -138,7 +138,7 @@ class SplitControlTests(unittest.TestCase):
         self.assertIn("motif_family_counts", train_summary)
         self.assertIn("semantic_template_counts", train_summary)
         self.assertIn("intervention_family_severity_counts", train_summary)
-        self.assertEqual(train_summary["environment_count"], 3)
+        self.assertEqual(train_summary["environment_count"], 10)
         self.assertEqual(len(train_summary["missing_task_cells"]), 0)
         self.assertEqual(len(val_summary["missing_task_cells"]), 0)
         self.assertEqual(len(test_summary["missing_task_cells"]), 0)

@@ -14,8 +14,8 @@ This repository is a self-contained executable artifact. It regenerates benchmar
 | One-command artifact audit | `python3 scripts/audit_artifact.py --quick --output-dir outputs/audit/mapshift_quick` |
 | Full reproduction command | `python3 scripts/build_benchmark.py --tier mapshift_2d --study-config configs/analysis/mapshift_2d_full_study_v0_1.json --output-dir outputs/releases/mapshift_2d_v0_1_full --print-summary` |
 | Deterministic mechanism diagnostic | `python3 scripts/run_mapshift_2d_study.py configs/analysis/mapshift_2d_belief_update_diagnostic_v0_1.json --print-summary` |
-| High-capacity world-model add-on | `python3 scripts/generate_calibration_report.py configs/benchmark/release_v0_1.json --tier mapshift_2d --run-config configs/calibration/pretrained_structured_graph_world_model_large_pilot_v0_1.json --model-seed 0 --samples-per-motif 1 --task-samples-per-class 3 --output outputs/studies/pretrained_structured_graph_world_model_large_pilot_v0_1/cep_report.json --log-file outputs/studies/pretrained_structured_graph_world_model_large_pilot_v0_1/logs/run.log --print-summary` |
-| Expected runtime | Smoke: minutes on CPU. Deterministic diagnostic: short CPU/GPU run. Full: single-GPU run recommended; the reference NVIDIA L4 run took about 11.5 wall-clock hours. |
+| High-capacity world-model add-on | `python3 scripts/generate_calibration_report.py configs/benchmark/release_v0_1.json --tier mapshift_2d --run-config configs/calibration/pretrained_structured_graph_world_model_1m_v0_1.json --model-seed 0 --samples-per-motif 1 --task-samples-per-class 3 --output outputs/studies/pretrained_structured_graph_world_model_1m_v0_1/cep_report.json --log-file outputs/studies/pretrained_structured_graph_world_model_1m_v0_1/logs/run.log --print-summary` |
+| Expected runtime | Smoke: minutes on CPU. Deterministic diagnostic: short CPU/GPU run. Full expanded study: single-GPU run recommended; budget roughly 30-36 wall-clock hours on one NVIDIA L4, with faster completion expected on L40S/H100-class GPUs. |
 | CPU/GPU requirements | CPU works for validation and smoke. Full study works on CPU but is intended for a CUDA-capable PyTorch install when available. |
 | Disk usage | Reserve 5GB for generated outputs and checkpoints; reserve more if installing CUDA PyTorch wheels into a fresh environment. |
 | Output paths | `outputs/releases/<run_name>/health`, `study`, `paper_outputs`, `manifests`, and `logs`. |
@@ -171,7 +171,7 @@ Recommended hardware:
 Expected runtime:
 
 - Smoke: minutes.
-- Full single-GPU study: overnight-scale. The completed reference run used one NVIDIA L4 and took about 11.5 wall-clock hours. Runtime is dominated by task generation, evaluation loops, bootstrap aggregation, and rendering. The learned training jobs are small.
+- Full single-GPU study: overnight-scale to multi-day depending on GPU. The expanded 24-motif release should be budgeted at roughly 30-36 wall-clock hours on one NVIDIA L4, with faster completion expected on L40S/H100-class GPUs. Runtime is dominated by task generation, evaluation loops, bootstrap aggregation, and rendering. The learned training jobs are small.
 - Full CPU-only study: possible but not recommended for deadline-sensitive reproduction.
 
 Monitor progress:
@@ -186,7 +186,7 @@ Count evaluation chunks:
 grep -c "evaluating family=" outputs/releases/mapshift_2d_v0_1_full/logs/build_benchmark.log
 ```
 
-The full config currently runs one primary CEP sweep plus four protocol-comparison sweeps. Each sweep has 8 motifs x 4 intervention families = 32 logged family chunks, so a completed run should log roughly 160 `evaluating family=` lines.
+The full config currently runs one primary CEP sweep plus four protocol-comparison sweeps. Each sweep has 24 motifs x 4 intervention families = 96 logged family chunks, so a completed run should log roughly 480 `evaluating family=` lines.
 
 Check completion:
 
@@ -310,23 +310,23 @@ PY
 
 ## High-Capacity Learned World-Model Add-On
 
-The main full-study artifact leaves the original baseline roster unchanged. To add the higher-capacity learned row without recomputing the older baselines, run a CEP-only calibration report for the larger pilot pretrained structured graph world model. The larger pilot has approximately 1.14M trainable parameters. The generated report contains all severities; the paper table reports the non-identity severity subset for this row.
+The main full-study artifact leaves the original baseline roster unchanged. To add the higher-capacity learned row without recomputing the older baselines, run a CEP-only calibration report for the 1.14M-parameter pretrained structured graph world model. The generated report contains all severities; the paper table reports the non-identity severity subset for this row.
 
 On a CUDA host:
 
 ```bash
 export MAPSHIFT_TORCH_DEVICE=cuda:0
-export MAPSHIFT_CHECKPOINT_DIR=/tmp/mapshift_pretrained_graph_world_model_large_pilot_v0_1
+export MAPSHIFT_CHECKPOINT_DIR=/tmp/mapshift_pretrained_graph_world_model_1m_v0_1
 
 python3 scripts/generate_calibration_report.py \
   configs/benchmark/release_v0_1.json \
   --tier mapshift_2d \
-  --run-config configs/calibration/pretrained_structured_graph_world_model_large_pilot_v0_1.json \
+  --run-config configs/calibration/pretrained_structured_graph_world_model_1m_v0_1.json \
   --model-seed 0 \
   --samples-per-motif 1 \
   --task-samples-per-class 3 \
-  --output outputs/studies/pretrained_structured_graph_world_model_large_pilot_v0_1/cep_report.json \
-  --log-file outputs/studies/pretrained_structured_graph_world_model_large_pilot_v0_1/logs/run.log \
+  --output outputs/studies/pretrained_structured_graph_world_model_1m_v0_1/cep_report.json \
+  --log-file outputs/studies/pretrained_structured_graph_world_model_1m_v0_1/logs/run.log \
   --print-summary
 ```
 
@@ -335,12 +335,12 @@ This command trains one global pretrained world model per seed across generated 
 Expected output:
 
 ```text
-outputs/studies/pretrained_structured_graph_world_model_large_pilot_v0_1/
+outputs/studies/pretrained_structured_graph_world_model_1m_v0_1/
   cep_report.json
   logs/run.log
 ```
 
-Expected scale: 8 motifs x 4 families x 4 severities x 3 task classes x 3 task samples. The learned baseline contributes 1152 all-severity episode records, of which 864 non-identity severity records are used for the paper row; the implicit oracle contributes 1152 reference records. This is substantially shorter than the full 11.5-hour L4 reproduction because it skips the older baselines and protocol-comparison sweeps.
+Expected scale: 24 motifs x 4 families x 4 severities x 3 task classes x 3 task samples. The learned baseline contributes 3456 all-severity episode records, of which 2592 non-identity severity records are used for the paper row; the implicit oracle contributes 3456 reference records. This is substantially shorter than the full expanded reproduction because it skips the older baselines and protocol-comparison sweeps.
 
 Extract the family-wise scores for the new row:
 
@@ -351,7 +351,7 @@ from pathlib import Path
 
 from mapshift.runners.evaluate import EvaluationRecord, _aggregate_metric_rows, _long_horizon_threshold
 
-p = Path("outputs/studies/pretrained_structured_graph_world_model_large_pilot_v0_1/cep_report.json")
+p = Path("outputs/studies/pretrained_structured_graph_world_model_1m_v0_1/cep_report.json")
 payload = json.loads(p.read_text())
 records = [
     EvaluationRecord(**{**record, "adaptation_curve": tuple(record.get("adaptation_curve", ()))})
@@ -376,7 +376,7 @@ python3 - <<'PY'
 import json
 from pathlib import Path
 
-p = Path("outputs/studies/pretrained_structured_graph_world_model_large_pilot_v0_1/cep_report.json")
+p = Path("outputs/studies/pretrained_structured_graph_world_model_1m_v0_1/cep_report.json")
 metadata = json.loads(p.read_text())["baseline_metadata"]["pretrained_structured_graph_world_model"]
 print("parameter_count_min:", metadata["parameter_count_min"])
 print("parameter_count_max:", metadata["parameter_count_max"])
@@ -466,9 +466,9 @@ The main full study uses eight scientific baseline classes. Deterministic refere
 | `persistent_memory_world_model` | `configs/calibration/persistent_memory_world_model_v0_1.json` | 16 memory slots, slot stride 3, readout width 8, 8 epochs, lr 0.01, max rollout 8 |
 | `relational_graph_world_model` | `configs/calibration/relational_graph_world_model_v0_1.json` | hidden size 10, 2 message-passing steps, 10 epochs, lr 0.01 |
 | `structured_dynamics_world_model` | `configs/calibration/structured_dynamics_world_model_v0_1.json` | geometry width 10, dynamics width 6, 10 epochs, lr 0.01 |
-| `pretrained_structured_graph_world_model` | `configs/calibration/pretrained_structured_graph_world_model_large_pilot_v0_1.json` | Approximately 1.14M trainable parameters; hidden size 256, 6 message-passing steps, pair width 256, dynamics width 128, 120 epochs, lr 0.0005, batch size 64, 4000 generated train environments, 800 generated validation environments; paper row reports 864 non-identity evaluation episodes |
+| `pretrained_structured_graph_world_model` | `configs/calibration/pretrained_structured_graph_world_model_1m_v0_1.json` | Approximately 1.14M trainable parameters; hidden size 256, 6 message-passing steps, pair width 256, dynamics width 128, 120 epochs, lr 0.0005, batch size 64, 4000 generated train environments, 800 generated validation environments; paper row reports 2592 non-identity evaluation episodes |
 
-Except for `pretrained_structured_graph_world_model`, learned baselines train separately for each base environment and model seed from the reward-free exploration trace and are not pretrained across environments. The full study expands the original learned baselines over seeds `[0, 1, 2, 3, 4]` using `configs/analysis/mapshift_2d_full_study_v0_1.json`; the append-only pretrained baseline is evaluated with the larger pilot command above.
+Except for `pretrained_structured_graph_world_model`, learned baselines train separately for each base environment and model seed from the reward-free exploration trace and are not pretrained across environments. The full study expands the original learned baselines over seeds `[0, 1, 2, 3, 4]` using `configs/analysis/mapshift_2d_full_study_v0_1.json`; the append-only pretrained baseline is evaluated with the high-capacity command above.
 
 For a faster deterministic diagnostic that isolates stale maps, local heuristics, and explicit belief updates, run:
 
@@ -563,7 +563,7 @@ The current release uses:
 
 - 96x96 occupancy maps
 - `T_exp=800` reward-free exploration steps
-- eight structural motifs
+- 24 structural motifs
 - motif-level train/validation/test splits
 - four intervention families: metric, topology, dynamics, semantic
 - severity levels 0, 1, 2, 3

@@ -170,18 +170,18 @@ class BenchmarkHealthTests(unittest.TestCase):
             task_samples_per_class=1,
         )
 
-        self.assertEqual(report.environment_health["environment_count"], 8)
-        self.assertEqual(report.environment_health["split_counts"], {"test": 3, "train": 3, "val": 2})
-        self.assertEqual(report.environment_health["path_length_summary"]["sum"], 126.0)
+        self.assertEqual(report.environment_health["environment_count"], 24)
+        self.assertEqual(report.environment_health["split_counts"], {"test": 8, "train": 10, "val": 6})
+        self.assertEqual(report.environment_health["path_length_summary"]["sum"], 457.0)
         self.assertEqual(report.intervention_coverage["undercovered_cells"], [])
         self.assertEqual(report.validator_summary["failed_intervention_count"], 0)
         self.assertEqual(report.validator_summary["severity_monotonicity_failures"], [])
         self.assertEqual(report.rejection_statistics["rejections_by_reason"], {})
         self.assertEqual(report.task_coverage["undercovered_cells"], [])
-        self.assertEqual(report.task_difficulty["task_count"], 384)
+        self.assertEqual(report.task_difficulty["task_count"], 1152)
 
         for family, severity_counts in report.intervention_coverage["family_severity_table"].items():
-            self.assertEqual(severity_counts, {"0": 8, "1": 8, "2": 8, "3": 8}, family)
+            self.assertEqual(severity_counts, {"0": 24, "1": 24, "2": 24, "3": 24}, family)
 
 
 def build_generator(bundle: object):

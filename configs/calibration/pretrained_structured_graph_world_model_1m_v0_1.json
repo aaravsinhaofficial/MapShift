@@ -1,6 +1,6 @@
 {
   "schema_version": "0.1.0",
-  "run_name": "pretrained_structured_graph_world_model_large_pilot_mapshift_2d_v0_1",
+  "run_name": "pretrained_structured_graph_world_model_1m_mapshift_2d_v0_1",
   "baseline_name": "pretrained_structured_graph_world_model",
   "seed": 0,
   "exploration_budget_steps": 800,
@@ -22,6 +22,6 @@
     "pretrain_exploration_budget_steps": 800,
     "pretrain_seed_offset": 20000,
     "torch_device": "auto",
-    "checkpoint_dir": "/tmp/mapshift_pretrained_graph_world_model_large_pilot"
+    "checkpoint_dir": "/tmp/mapshift_pretrained_graph_world_model_1m"
   }
 }

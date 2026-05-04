@@ -56,7 +56,7 @@
     "weak_heuristic_baseline"
   ],
   "seed_counts": {
-    "pilot": 2,
+    "smoke": 2,
     "main": 5,
     "bootstrap_reporting": 5
   }
