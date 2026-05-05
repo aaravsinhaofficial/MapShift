@@ -7,9 +7,9 @@
 - Status: Frozen 2D benchmark release contract
 - Scope: 2D-first scientific and protocol specification
 - Companion documents:
-  - [Implementation Plan](/Users/aaravsinha/MapShift/docs/IMPLEMENTATION_PLAN.md)
-  - [Evaluation Card](/Users/aaravsinha/MapShift/docs/evaluation_card.md)
-  - [Release Checklist](/Users/aaravsinha/MapShift/docs/release_checklist.md)
+  - [Implementation Plan](../IMPLEMENTATION_PLAN.md)
+  - [Evaluation Card](../evaluation_card.md)
+  - [Release Checklist](../release_checklist.md)
 
 This document is the source of truth for what the frozen MapShift-2D v0.1 release is intended to measure, how it is implemented, and how results must be reported. The ProcTHOR-compatible 3D files are prototype/future-work artifacts and do not carry the v0.1 scientific claim.
 

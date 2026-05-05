@@ -6,7 +6,6 @@ authors:
 version: "0.1.0"
 date-released: "2026-05-03"
 license: "MIT"
-repository-code: "https://github.com/aaravsinhaofficial/MapShift"
 keywords:
   - embodied planning
   - benchmark
