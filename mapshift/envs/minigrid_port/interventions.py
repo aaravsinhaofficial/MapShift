@@ -85,7 +85,8 @@ class MiniGridPortIntervention:
     def _apply_semantic(self, environment: MiniGridPortEnvironment, severity: int) -> MiniGridPortEnvironment:
         tokens = sorted(environment.token_positions)
         current_index = tokens.index(environment.active_token)
-        new_token = tokens[(current_index + severity) % len(tokens)]
+        remap_offset = ((severity - 1) % (len(tokens) - 1)) + 1
+        new_token = tokens[(current_index + remap_offset) % len(tokens)]
         payload = environment.to_dict()
         payload["environment_id"] = f"{environment.environment_id}-semantic-s{severity}"
         payload["active_token"] = new_token
@@ -98,18 +99,32 @@ class MiniGridPortIntervention:
         rng.shuffle(candidates)
         blocker_count = min(len(candidates), severity)
         transformed = environment.clone(environment_id=f"{environment.environment_id}-topology-s{severity}")
-        for blocker in candidates[:blocker_count]:
+        applied_count = 0
+        for blocker in candidates:
+            if applied_count >= blocker_count:
+                break
             candidate = transformed.with_cell(blocker, "wall")
             if candidate.shortest_path():
                 transformed = candidate
+                applied_count += 1
         payload = transformed.to_dict()
-        payload["history"] = [*payload["history"], f"topology:blockers={blocker_count}"]
+        payload["history"] = [*payload["history"], f"topology:blockers={applied_count}"]
         return MiniGridPortEnvironment.from_dict(payload)
 
     def _topology_blocker_candidates(self, environment: MiniGridPortEnvironment) -> tuple[GridPos, ...]:
         path = environment.shortest_path()
         protected = {environment.start_pos, environment.goal_pos, *environment.token_positions.values()}
-        return tuple(pos for pos in path[1:-1] if pos not in protected and environment.cell_type(pos) == "floor")
+        path_candidates = [pos for pos in path[1:-1] if pos not in protected and environment.cell_type(pos) == "floor"]
+        path_set = set(path_candidates)
+        off_path_candidates = [
+            (row, col)
+            for row in range(1, environment.height - 1)
+            for col in range(1, environment.width - 1)
+            if (row, col) not in protected
+            and (row, col) not in path_set
+            and environment.cell_type((row, col)) == "floor"
+        ]
+        return tuple(path_candidates + off_path_candidates)
 
     def _severity_parameter(self) -> str:
         return {

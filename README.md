@@ -15,6 +15,7 @@ This repository is a self-contained executable artifact. It regenerates benchmar
 | Full reproduction command | `python3 scripts/build_benchmark.py --tier mapshift_2d --study-config configs/analysis/mapshift_2d_full_study_v0_1.json --output-dir outputs/releases/mapshift_2d_v0_1_full --print-summary` |
 | Deterministic mechanism diagnostic | `python3 scripts/run_mapshift_2d_study.py configs/analysis/mapshift_2d_belief_update_diagnostic_v0_1.json --print-summary` |
 | MiniGrid port smoke | `python3 scripts/smoke_minigrid_port.py --family topology --severity 2 --motif two_room_door` |
+| MiniGrid CPE sanity-transfer study | `python3 scripts/run_minigrid_cpe_study.py --output-dir outputs/studies/minigrid_cpe_sanity_transfer --print-summary` |
 | High-capacity world-model add-on | `python3 scripts/generate_calibration_report.py configs/benchmark/release_v0_1.json --tier mapshift_2d --run-config configs/calibration/pretrained_structured_graph_world_model_1m_v0_1.json --model-seed 0 --samples-per-motif 1 --task-samples-per-class 3 --output outputs/studies/pretrained_structured_graph_world_model_1m_v0_1/cep_report.json --log-file outputs/studies/pretrained_structured_graph_world_model_1m_v0_1/logs/run.log --print-summary` |
 | Expected runtime | Smoke: minutes on CPU. Deterministic diagnostic: short CPU/GPU run. Full expanded study: single-GPU run recommended; budget roughly 30-36 wall-clock hours on one NVIDIA L4, with faster completion expected on L40S/H100-class GPUs. |
 | CPU/GPU requirements | CPU works for validation and smoke. Full study works on CPU but is intended for a CUDA-capable PyTorch install when available. |
@@ -50,7 +51,17 @@ python -m pip install -e ".[minigrid]"
 python3 scripts/smoke_minigrid_port.py --instantiate-minigrid
 ```
 
-The MiniGrid port is not required for reproducing the paper's primary MapShift-2D tables. It is included as an executable adapter showing how the CPE contract maps onto a richer external simulator API: deterministic matched base/intervened MiniGrid-compatible environments, declared metric/topology/dynamics/semantic interventions, invariant validators, and optional instantiation of an actual `minigrid` environment when the extra dependency is installed.
+The MiniGrid port is not required for reproducing the paper's primary MapShift-2D tables. It is included as an executable adapter showing how the CPE contract maps onto a richer external simulator API: deterministic matched base/intervened MiniGrid-compatible environments, declared metric/topology/dynamics/semantic interventions, invariant validators, a compact sanity-transfer study, and optional instantiation of an actual `minigrid` environment when the extra dependency is installed.
+
+Run the compact MiniGrid CPE sanity-transfer study:
+
+```bash
+python3 scripts/run_minigrid_cpe_study.py \
+  --output-dir outputs/studies/minigrid_cpe_sanity_transfer \
+  --print-summary
+```
+
+This CPU-only study uses six MiniGrid-style motifs with four deterministic seeds each by default. It reports validator failures, reference solvability, task rejections, weak-baseline saturation, family-wise deterministic probe scores, and a protocol-sensitivity table comparing same-environment evaluation with CPE.
 
 Reviewed-environment pins are provided for reviewers who want a tighter dependency target:
 

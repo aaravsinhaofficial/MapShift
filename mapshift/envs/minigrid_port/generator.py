@@ -23,11 +23,21 @@ class MiniGridPortGenerator:
     """Generate small MiniGrid-compatible maps with MapShift matched-pair metadata."""
 
     _TOKENS = ("target_alpha", "target_beta", "target_gamma")
-    _MOTIFS = ("two_room_door", "four_room_cross", "corridor_bend")
+    _MOTIFS = (
+        "two_room_door",
+        "four_room_cross",
+        "corridor_bend",
+        "loop_key_room",
+        "lava_gap",
+        "zigzag_rooms",
+    )
     _SPLITS = {
         "two_room_door": "train",
-        "four_room_cross": "val",
-        "corridor_bend": "test",
+        "four_room_cross": "train",
+        "corridor_bend": "val",
+        "loop_key_room": "train",
+        "lava_gap": "test",
+        "zigzag_rooms": "test",
     }
 
     def __init__(self, width: int = 11, height: int = 11, observation_radius: int = 7) -> None:
@@ -118,7 +128,7 @@ class MiniGridPortGenerator:
                 "target_beta": (self.height - 2, self.width - 2),
                 "target_gamma": (1, 1),
             }
-        else:
+        elif motif_tag == "corridor_bend":
             for row in range(2, self.height - 2):
                 for col in range(2, self.width - 2):
                     grid[row][col] = "wall"
@@ -134,6 +144,52 @@ class MiniGridPortGenerator:
                 "target_alpha": (self.height - 2, self.width - 2),
                 "target_beta": (bend_row, self.width - 2),
                 "target_gamma": (bend_row, 1),
+            }
+        elif motif_tag == "loop_key_room":
+            for row in range(3, self.height - 3):
+                for col in range(3, self.width - 3):
+                    grid[row][col] = "wall"
+            for pos in ((self.height // 2, 3), (self.height // 2, self.width - 4), (3, self.width // 2), (self.height - 4, self.width // 2)):
+                grid[pos[0]][pos[1]] = "floor"
+            start_pos = (self.height - 2, 1)
+            token_positions = {
+                "target_alpha": (1, self.width - 2),
+                "target_beta": (self.height - 2, self.width - 2),
+                "target_gamma": (1, 1),
+            }
+        elif motif_tag == "lava_gap":
+            lava_row = self.height // 2
+            for col in range(1, self.width - 1):
+                grid[lava_row][col] = "lava"
+            for col in (2, self.width // 2, self.width - 3):
+                grid[lava_row][col] = "floor"
+            for row in range(2, self.height - 2):
+                grid[row][self.width // 2] = "wall"
+            for row in (2, lava_row, self.height - 3):
+                grid[row][self.width // 2] = "floor"
+            start_pos = (self.height - 2, 1)
+            token_positions = {
+                "target_alpha": (1, self.width - 2),
+                "target_beta": (self.height - 2, self.width - 2),
+                "target_gamma": (1, 1),
+            }
+        else:
+            openings = {
+                3: 2,
+                5: self.height - 3,
+                7: 4,
+            }
+            for col, opening in openings.items():
+                if col >= self.width - 1:
+                    continue
+                for row in range(1, self.height - 1):
+                    grid[row][col] = "wall"
+                grid[opening][col] = "floor"
+            start_pos = (self.height - 2, 1)
+            token_positions = {
+                "target_alpha": (1, self.width - 2),
+                "target_beta": (self.height - 2, self.width - 2),
+                "target_gamma": (self.height // 2, self.width - 2),
             }
 
         active_token = self._TOKENS[seed % len(self._TOKENS)]

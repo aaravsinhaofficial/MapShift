@@ -126,6 +126,32 @@ mechanism_diagnostic_analysis/tables/heldout_motif_consistency.md
 mechanism_diagnostic_analysis/tables/paired_delta_bootstrap.md
 ```
 
+## MiniGrid CPE Sanity-Transfer Study
+
+This CPU-only check verifies that the CPE contract transfers to a MiniGrid-compatible substrate. It uses six MiniGrid-style motifs with four deterministic seeds each, applies metric/topology/dynamics/semantic interventions, runs validators, and writes compact protocol-sensitivity tables:
+
+```bash
+python3 scripts/run_minigrid_cpe_study.py \
+  --output-dir outputs/studies/minigrid_cpe_sanity_transfer \
+  --print-summary
+```
+
+Expected outputs:
+
+```text
+outputs/studies/minigrid_cpe_sanity_transfer/
+  study_bundle.json
+  tables/health_summary.md
+  tables/familywise_scores.md
+  tables/protocol_sensitivity.md
+  tables/split_sensitivity.md
+  raw/records.jsonl
+  raw/intervention_pairs.jsonl
+  manifests/minigrid_cpe_manifest.json
+```
+
+A healthy run reports zero task rejections, zero validator failures, reference solvability of 1.000, and a non-saturating weak-baseline score.
+
 ## High-Capacity Learned World-Model Add-On
 
 This optional add-on evaluates only the 1.14M-parameter pretrained structured graph world model on the CEP grid. It does not rerun the older baselines. An implicit oracle reference is still evaluated internally so oracle fields in the raw records remain populated. The generated report contains all severities; the paper table reports the non-identity subset for this high-capacity learned row.
