@@ -258,6 +258,8 @@ def plan_on_predicted_graph(
         if probability < edge_threshold:
             continue
         left_id, right_id = pair
+        if left_id not in adjacency or right_id not in adjacency:
+            continue
         cost = traversal_costs.get(pair, 1.0)
         adjacency[left_id].append((right_id, cost))
         adjacency[right_id].append((left_id, cost))

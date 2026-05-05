@@ -8,7 +8,7 @@ from pathlib import Path
 from mapshift.baselines import instantiate_baseline, load_baseline_run_config
 from mapshift.baselines.api import BaselineContext, BaselineRunConfig, deterministic_exploration_trace
 from mapshift.baselines.learned_common import resolve_torch_device
-from mapshift.baselines.learned_graph import build_graph_training_data
+from mapshift.baselines.learned_graph import build_graph_training_data, plan_on_predicted_graph
 from mapshift.core.schemas import load_release_bundle
 from mapshift.envs.map2d.dynamics import DynamicsParameters2D
 from mapshift.envs.map2d.generator import Map2DGenerator
@@ -195,6 +195,22 @@ class CalibrationBaselineTests(unittest.TestCase):
         second = run_evaluation(heuristic, environment, task, exploration, context)
 
         self.assertEqual(first.to_dict(), second.to_dict())
+
+    def test_predicted_graph_planner_ignores_edges_outside_known_node_order(self) -> None:
+        route = plan_on_predicted_graph(
+            node_order=("n0", "n1", "n2"),
+            start_node_id="n0",
+            goal_node_id="n2",
+            edge_probabilities={
+                ("n0", "n1"): 1.0,
+                ("n1", "n2"): 1.0,
+                ("n2", "n7"): 1.0,
+            },
+            traversal_costs={},
+            edge_threshold=0.5,
+        )
+
+        self.assertEqual(route, ["n0", "n1", "n2"])
 
     def test_classical_belief_update_planner_reroutes_after_topology_change(self) -> None:
         bundle = load_release_bundle(ROOT_CONFIG)
