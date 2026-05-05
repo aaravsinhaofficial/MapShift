@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render paper-facing MapShift-2D tables and SVG figures from saved JSON outputs."""
+"""Render paper-facing MapShift tables and SVG figures from saved JSON outputs."""
 
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ def _render_health_table(bundle: dict[str, Any]) -> str:
     health = bundle["benchmark_health"]
     split_leakage = health["split_health"]["canonical_split_leakage_report"]
     rows = [
-        ["2D environments", health["environment_health"]["environment_count"]],
+        ["Environments", health["environment_health"]["environment_count"]],
         ["Motif splits", json.dumps(health["environment_health"]["split_counts"], sort_keys=True)],
         ["Task count", health["task_difficulty"]["task_count"]],
         ["Task rejections", health["rejection_statistics"]["total_rejections"]],
@@ -144,19 +144,51 @@ def _svg(width: int, height: int, body: str) -> str:
 
 
 def _cep_protocol_svg() -> str:
-    labels = ["Generate", "Intervene", "Explore", "Evaluate", "Analyze"]
-    details = ["seeded 2D map", "one family, severity s", "reward-free T=800", "post-shift tasks", "family-wise CIs"]
-    body = ['<rect width="900" height="170" fill="#ffffff"/>']
-    x = 30
-    for index, label in enumerate(labels):
-        body.append(f'<rect class="box" x="{x}" y="45" width="145" height="70" rx="6"/>')
-        body.append(f'<text class="label" x="{x + 72}" y="74" text-anchor="middle">{label}</text>')
-        body.append(f'<text class="small muted" x="{x + 72}" y="96" text-anchor="middle">{details[index]}</text>')
-        if index < len(labels) - 1:
-            body.append(f'<line class="axis" x1="{x + 150}" y1="80" x2="{x + 195}" y2="80"/>')
-            body.append(f'<polygon points="{x + 195},80 {x + 185},74 {x + 185},86" fill="#475569"/>')
-        x += 185
-    return _svg(900, 170, "\n".join(body))
+    stages = [
+        ("Base\nenvironment", ("motif + seed", "hidden global map")),
+        ("Reward-free\nexploration", ("T_exp = 800", "no task reward")),
+        ("Frozen memory /\nworld model", ("visited state", "learned graph or state")),
+        ("Intervention", ("metric | topology", "dynamics | semantic")),
+        ("Changed\nenvironment", ("matched counterfactual", "severity 0-3")),
+        ("Post-intervention\ntasks", ("planning", "inference | adaptation")),
+        ("Family-wise\nmetrics", ("primary score + CI", "no pooled-first ranking")),
+    ]
+    width = 1180
+    height = 230
+    box_w = 132
+    box_h = 92
+    gap = 32
+    top = 72
+    left = 28
+    body = [
+        f'<rect width="{width}" height="{height}" fill="#ffffff"/>',
+        '<text class="label" x="28" y="34">Counterfactual embodied planning protocol</text>',
+        '<text class="small muted" x="28" y="52">Exploration happens before the world changes; evaluation happens only after the intervention.</text>',
+    ]
+    for index, (label, details) in enumerate(stages):
+        x = left + index * (box_w + gap)
+        fill = "#f8fafc"
+        if index in {2, 3, 5, 6}:
+            fill = "#eef6ff"
+        body.append(f'<rect x="{x}" y="{top}" width="{box_w}" height="{box_h}" rx="6" fill="{fill}" stroke="#334155" stroke-width="1.2"/>')
+        label_lines = label.split("\n")
+        for line_index, line in enumerate(label_lines):
+            body.append(f'<text class="label" x="{x + box_w / 2:.1f}" y="{top + 25 + line_index * 16}" text-anchor="middle">{line}</text>')
+        for detail_index, detail in enumerate(details):
+            body.append(
+                f'<text class="small muted" x="{x + box_w / 2:.1f}" y="{top + 63 + detail_index * 14}" text-anchor="middle">{detail}</text>'
+            )
+        if index < len(stages) - 1:
+            x1 = x + box_w + 5
+            x2 = x + box_w + gap - 8
+            y = top + box_h / 2
+            body.append(f'<line class="axis" x1="{x1}" y1="{y:.1f}" x2="{x2}" y2="{y:.1f}"/>')
+            body.append(f'<polygon points="{x2},{y:.1f} {x2 - 10},{y - 6:.1f} {x2 - 10},{y + 6:.1f}" fill="#475569"/>')
+    body.append('<line x1="268" y1="190" x2="470" y2="190" stroke="#64748b" stroke-width="1" stroke-dasharray="4 4"/>')
+    body.append('<text class="small muted" x="369" y="208" text-anchor="middle">state is fixed before intervention</text>')
+    body.append('<line x1="594" y1="190" x2="960" y2="190" stroke="#64748b" stroke-width="1" stroke-dasharray="4 4"/>')
+    body.append('<text class="small muted" x="777" y="208" text-anchor="middle">tasks are sampled from the base/changed pair</text>')
+    return _svg(width, height, "\n".join(body))
 
 
 def _intervention_examples_svg() -> str:
@@ -302,10 +334,25 @@ def render_outputs(study_bundle_path: Path, output_dir: Path) -> dict[str, str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("study_bundle", help="Path to a saved study_bundle.json file.")
+    parser.add_argument("study_bundle", nargs="?", help="Path to a saved study_bundle.json file.")
     parser.add_argument("--output-dir", default="")
+    parser.add_argument(
+        "--protocol-diagram-only",
+        action="store_true",
+        help="Render only the data-free CEP protocol diagram. This does not require a study bundle.",
+    )
     parser.add_argument("--print-summary", action="store_true")
     args = parser.parse_args()
+
+    if args.protocol_diagram_only:
+        output_dir = Path(args.output_dir).resolve() if args.output_dir else Path("outputs/paper_outputs").resolve()
+        path = _write(output_dir / "figures" / "cep_protocol_diagram.svg", _cep_protocol_svg())
+        if args.print_summary:
+            print(json.dumps({"cep_protocol_diagram": path}, indent=2, sort_keys=True))
+        return 0
+
+    if not args.study_bundle:
+        parser.error("study_bundle is required unless --protocol-diagram-only is set")
 
     study_bundle_path = Path(args.study_bundle).resolve()
     output_dir = Path(args.output_dir).resolve() if args.output_dir else study_bundle_path.parent / "paper_outputs"

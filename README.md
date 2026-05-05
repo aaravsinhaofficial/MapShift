@@ -14,6 +14,7 @@ This repository is a self-contained executable artifact. It regenerates benchmar
 | One-command artifact audit | `python3 scripts/audit_artifact.py --quick --output-dir outputs/audit/mapshift_quick` |
 | Full reproduction command | `python3 scripts/build_benchmark.py --tier mapshift_2d --study-config configs/analysis/mapshift_2d_full_study_v0_1.json --output-dir outputs/releases/mapshift_2d_v0_1_full --print-summary` |
 | Deterministic mechanism diagnostic | `python3 scripts/run_mapshift_2d_study.py configs/analysis/mapshift_2d_belief_update_diagnostic_v0_1.json --print-summary` |
+| MiniGrid port smoke | `python3 scripts/smoke_minigrid_port.py --family topology --severity 2 --motif two_room_door` |
 | High-capacity world-model add-on | `python3 scripts/generate_calibration_report.py configs/benchmark/release_v0_1.json --tier mapshift_2d --run-config configs/calibration/pretrained_structured_graph_world_model_1m_v0_1.json --model-seed 0 --samples-per-motif 1 --task-samples-per-class 3 --output outputs/studies/pretrained_structured_graph_world_model_1m_v0_1/cep_report.json --log-file outputs/studies/pretrained_structured_graph_world_model_1m_v0_1/logs/run.log --print-summary` |
 | Expected runtime | Smoke: minutes on CPU. Deterministic diagnostic: short CPU/GPU run. Full expanded study: single-GPU run recommended; budget roughly 30-36 wall-clock hours on one NVIDIA L4, with faster completion expected on L40S/H100-class GPUs. |
 | CPU/GPU requirements | CPU works for validation and smoke. Full study works on CPU but is intended for a CUDA-capable PyTorch install when available. |
@@ -41,6 +42,15 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e .
 ```
+
+Optional MiniGrid port install:
+
+```bash
+python -m pip install -e ".[minigrid]"
+python3 scripts/smoke_minigrid_port.py --instantiate-minigrid
+```
+
+The MiniGrid port is not required for reproducing the paper's primary MapShift-2D tables. It is included as an executable adapter showing how the CPE contract maps onto a richer external simulator API: deterministic matched base/intervened MiniGrid-compatible environments, declared metric/topology/dynamics/semantic interventions, invariant validators, and optional instantiation of an actual `minigrid` environment when the extra dependency is installed.
 
 Reviewed-environment pins are provided for reviewers who want a tighter dependency target:
 
@@ -644,7 +654,7 @@ The current release uses:
 - planning, inference, and adaptation tasks
 - 1000 bootstrap resamples with grouping by `environment_model_seed_id`
 
-The 3D-compatible files remain in the repository as prototype/future-work code and are not required for the current release claims. Use `--tier mapshift_2d` for validation and artifact building so prototype 3D status does not block the primary artifact.
+The 3D-compatible files remain in the repository as prototype/future-work code and are not required for the current release claims. The MiniGrid port in `mapshift/envs/minigrid_port/` is an executable adapter for the CPE contract, not a replacement for the primary MapShift-2D release. Use `--tier mapshift_2d` for validation and artifact building so prototype 3D status does not block the primary artifact.
 
 ## Repository Structure
 
@@ -652,6 +662,7 @@ The 3D-compatible files remain in the repository as prototype/future-work code a
 mapshift/
   core/              Config schemas, manifests, logging, registry
   envs/map2d/        Map generator, dynamics, renderer
+  envs/minigrid_port/ Optional MiniGrid-compatible CPE adapter and validators
   interventions/     Metric, topology, dynamics, semantic interventions
   tasks/             Planning, inference, adaptation task definitions/samplers
   baselines/         Baseline API and implementations
@@ -676,6 +687,7 @@ scripts/
   render_paper_outputs.py
   run_mapshift_2d_study.py
   run_protocol_comparison.py
+  smoke_minigrid_port.py
 
 docs/
   README.md          Documentation map and reviewer-facing entry points

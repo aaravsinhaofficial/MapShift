@@ -15,5 +15,11 @@ dependencies = [
     "torch>=2.2,<3.0",
 ]
 
+[project.optional-dependencies]
+minigrid = [
+    "gymnasium>=0.29,<1.1",
+    "minigrid>=2.3,<3.0",
+]
+
 [tool.setuptools.packages.find]
 include = ["mapshift*"]
