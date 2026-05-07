@@ -7,7 +7,7 @@ version: "0.1.0"
 date-released: "2026-05-03"
 license: "MIT"
 keywords:
-  - embodied planning
+  - embodied world models
   - benchmark
   - evaluation protocol
   - world models

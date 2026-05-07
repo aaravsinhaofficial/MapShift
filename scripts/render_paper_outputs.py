@@ -162,7 +162,7 @@ def _cep_protocol_svg() -> str:
     left = 28
     body = [
         f'<rect width="{width}" height="{height}" fill="#ffffff"/>',
-        '<text class="label" x="28" y="34">Counterfactual embodied planning protocol</text>',
+        '<text class="label" x="28" y="34">Controlled post-intervention evaluation protocol</text>',
         '<text class="small muted" x="28" y="52">Exploration happens before the world changes; evaluation happens only after the intervention.</text>',
     ]
     for index, (label, details) in enumerate(stages):

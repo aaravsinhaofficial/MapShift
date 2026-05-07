@@ -17,7 +17,7 @@ MapShift is intended as an evaluation artifact, not as a claim that a particular
 - Name: MapShift
 - Release: `mapshift_2d_v0_1`
 - Artifact type: benchmark and evaluation protocol
-- Primary domain: embodied planning and world-model evaluation
+- Primary domain: embodied world-model evaluation
 - Benchmark tiers:
   - MapShift-2D v0.1, frozen primary release
   - MapShift-3D on ProcTHOR, prototype/future work only
