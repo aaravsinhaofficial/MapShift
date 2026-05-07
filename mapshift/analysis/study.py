@@ -125,7 +125,7 @@ def run_mapshift_2d_study(
         list(study_config.motif_tags) if study_config.motif_tags else "<all>",
         list(study_config.family_names) if study_config.family_names else "<all>",
     )
-    LOGGER.info("Running primary CEP report")
+    LOGGER.info("Running primary CPE report")
     cep_report = run_calibration_suite(
         release_bundle=bundle,
         baseline_run_configs=baseline_run_configs,
@@ -136,7 +136,7 @@ def run_mapshift_2d_study(
         motif_tags=study_config.motif_tags or None,
         family_names=study_config.family_names or None,
     )
-    LOGGER.info("Primary CEP report complete records=%d", len(cep_report.records))
+    LOGGER.info("Primary CPE report complete records=%d", len(cep_report.records))
     LOGGER.info("Running protocol sensitivity reports")
     protocol_report = run_protocol_comparison_suite(
         release_bundle=bundle,
@@ -447,7 +447,7 @@ def _p1_support(protocol_sensitivity: dict[str, Any]) -> dict[str, Any]:
             "rank_reversal_count": len(rank_reversals),
             "family_rank_change_count": len(family_rank_changes),
         },
-        "claim": "standard same-environment evaluation can differ materially from post-intervention CEP evaluation",
+        "claim": "standard same-environment evaluation can differ materially from post-intervention CPE evaluation",
     }
 
 

@@ -23,7 +23,7 @@ The terms `MUST`, `SHOULD`, and `MAY` are normative.
 
 ## 2. Scientific Objective
 
-MapShift is a benchmark and evaluation protocol for Counterfactual Embodied Planning (CEP).
+MapShift is a benchmark and evaluation protocol for controlled post-intervention evaluation (CPE) of embodied world models.
 
 The benchmark addresses the following scientific question:
 
@@ -65,7 +65,7 @@ Metric, topology, dynamics, and semantic interventions probe distinct weaknesses
 
 ### P3. Scientific consequence
 
-Model rankings and scientific conclusions change when evaluation is done under CEP instead of standard same-environment performance.
+Model rankings and scientific conclusions change when evaluation is done under CPE instead of standard same-environment performance.
 
 ## 5. Formal Problem Definition
 
@@ -83,7 +83,7 @@ Let `E` denote a base environment distribution.
 
 The central benchmark target is:
 
-`CEP(M) = E_{e,f,sigma,q}[Perf(M; e -> e', q)]`
+`CPE(M) = E_{e,f,sigma,q}[Perf(M; e -> e', q)]`
 
 MapShift MUST not treat a single scalar aggregate as the only primary endpoint. The scientific core of the benchmark is family-wise performance.
 
@@ -569,7 +569,7 @@ Freeze before baseline training:
 
 - supported claims
 - non-claims
-- formal CEP definition
+- formal CPE definition
 - intervention families
 - task classes
 - reporting hierarchy

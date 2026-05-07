@@ -21,7 +21,7 @@
     "scientific_spec": [
       "supported_claims",
       "unsupported_claims",
-      "formal_cep_definition",
+      "formal_cpe_definition",
       "intervention_families",
       "task_classes",
       "reporting_hierarchy",

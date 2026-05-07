@@ -152,9 +152,11 @@ outputs/studies/minigrid_cpe_sanity_transfer/
 
 A healthy run reports zero task rejections, zero validator failures, reference solvability of 1.000, and a non-saturating weak-baseline score.
 
-## High-Capacity Learned World-Model Add-On
+## Capacity Add-On Runs
 
-This optional add-on evaluates only the 1.14M-parameter pretrained structured graph world model on the CEP grid. It does not rerun the older baselines. An implicit oracle reference is still evaluated internally so oracle fields in the raw records remain populated. The generated report contains all severities; the paper table reports the non-identity subset for this high-capacity learned row.
+These optional add-ons evaluate capacity rows on the CPE grid without rerunning the older baselines. An implicit oracle reference is still evaluated internally so oracle fields in the raw records remain populated. The generated reports contain all severities; the paper table reports the non-identity subset for these rows.
+
+Pretrained structured graph world model:
 
 ```bash
 export MAPSHIFT_TORCH_DEVICE=cuda:0
@@ -174,7 +176,27 @@ python3 scripts/generate_calibration_report.py \
 
 Expected scale: the learned model contributes 3456 all-severity episode records, of which 2592 are non-identity severity episodes used for the paper row. The implicit oracle contributes 3456 additional reference records. The high-capacity config has approximately 1.14M trainable parameters.
 
-Extract the family-wise learned-baseline row:
+Large persistent-memory world model:
+
+```bash
+export MAPSHIFT_TORCH_DEVICE=cuda:0
+export MAPSHIFT_CHECKPOINT_DIR=/tmp/mapshift_persistent_memory_world_model_large_v0_1
+
+python3 scripts/generate_calibration_report.py \
+  configs/benchmark/release_v0_1.json \
+  --tier mapshift_2d \
+  --run-config configs/calibration/persistent_memory_world_model_large_v0_1.json \
+  --model-seed 0 \
+  --samples-per-motif 1 \
+  --task-samples-per-class 3 \
+  --output outputs/studies/persistent_memory_world_model_large_v0_1/cep_report.json \
+  --log-file outputs/studies/persistent_memory_world_model_large_v0_1/logs/run.log \
+  --print-summary
+```
+
+This config uses 2048 memory slots, readout width 672, Adam learning rate 0.0005, 120 epochs, and early-stopping patience 20.
+
+Extract the family-wise pretrained graph row; for the large persistent-memory row, use `outputs/studies/persistent_memory_world_model_large_v0_1/cep_report.json` and filter `baseline_name == "persistent_memory_world_model"`:
 
 ```bash
 python3 - <<'PY'
@@ -217,7 +239,7 @@ tail -f outputs/releases/mapshift_2d_v0_1_full/logs/build_benchmark.log
 grep -c "evaluating family=" outputs/releases/mapshift_2d_v0_1_full/logs/build_benchmark.log
 ```
 
-The full config runs one primary CEP sweep plus four protocol-comparison sweeps. Each sweep has 24 motifs x 4 families, so a completed run logs roughly 480 `evaluating family=` chunks.
+The full config runs one primary CPE sweep (`cep` protocol id) plus four protocol-comparison sweeps. Each sweep has 24 motifs x 4 families, so a completed run logs roughly 480 `evaluating family=` chunks.
 
 ## Paper Output Mapping
 
@@ -228,7 +250,7 @@ The full config runs one primary CEP sweep plus four protocol-comparison sweeps.
 | Full-run protocol sensitivity | `outputs/releases/mapshift_2d_v0_1_full/study/tables/protocol_sensitivity_and_rank_correlation.json` |
 | Severity-response curves | `outputs/releases/mapshift_2d_v0_1_full/study/tables/severity_response.json` and `paper_outputs/figures/severity_response_curves.svg` |
 | Deterministic mechanism diagnostic | `outputs/studies/mapshift_2d_belief_update_diagnostic_v0_1/study_bundle.json` |
-| High-capacity learned add-on | `outputs/studies/pretrained_structured_graph_world_model_1m_v0_1/cep_report.json` |
+| High-capacity learned add-ons | `outputs/studies/pretrained_structured_graph_world_model_1m_v0_1/cep_report.json` and `outputs/studies/persistent_memory_world_model_large_v0_1/cep_report.json` |
 | Raw episode records | `study/raw/cep_report.json` and `study/raw/protocol_comparison_report.json` |
 | Rendered tables/figures | `outputs/releases/<run_name>/paper_outputs/` |
 

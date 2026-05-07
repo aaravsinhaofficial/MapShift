@@ -110,10 +110,10 @@ def render_heldout_consistency_markdown(rows: Sequence[Mapping[str, Any]]) -> st
     headers = [
         "Motif",
         "Family",
-        "BU-STM CEP",
+        "BU-STM CPE",
         "BU-STM Same-env",
-        "STM CEP-Same",
-        "BU CEP-Same",
+        "STM CPE-Same",
+        "BU CPE-Same",
         "Reversal/reduction",
     ]
     lines = ["| " + " | ".join(headers) + " |", "| " + " | ".join("---" for _ in headers) + " |"]
@@ -142,10 +142,10 @@ def render_heldout_summary_markdown(rows: Sequence[Mapping[str, Any]]) -> str:
     headers = [
         "Family",
         "Motifs",
-        "Mean BU-STM CEP",
+        "Mean BU-STM CPE",
         "Mean BU-STM Same-env",
         "Mean protocol delta",
-        "BU wins CEP",
+        "BU wins CPE",
         "Reversal/reduction",
     ]
     lines = ["| " + " | ".join(headers) + " |", "| " + " | ".join("---" for _ in headers) + " |"]

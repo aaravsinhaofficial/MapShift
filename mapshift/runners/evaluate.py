@@ -145,7 +145,7 @@ class CalibrationReport:
 
 
 def default_post_intervention_protocol() -> EvaluationProtocol:
-    """Return the canonical CEP evaluation protocol."""
+    """Return the canonical CPE evaluation protocol."""
 
     return EvaluationProtocol(name="cep", environment_mode="post_intervention", exploration_mode="reward_free", horizon_multiplier=1.0)
 

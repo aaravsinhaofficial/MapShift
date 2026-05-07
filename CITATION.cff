@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use MapShift, please cite the associated NeurIPS Evaluations & Datasets submission."
-title: "MapShift: Controlled Post-Intervention Evaluation for Embodied Planning"
+title: "MapShift: Controlled Post-Intervention Evaluation for Embodied World Models"
 authors:
   - name: "MapShift Authors"
 version: "0.1.0"

@@ -16,7 +16,7 @@ CORE_FIGURES = (
 
 
 def familywise_degradation_curves_figure_data(cep_report: dict[str, Any]) -> dict[str, Any]:
-    """Return figure-ready severity-response data from one CEP report payload."""
+    """Return figure-ready severity-response data from one CPE report payload."""
 
     rows = cep_report["familywise_summary"]["by_severity"]
     return {

@@ -286,11 +286,11 @@ def _rank_comparison_svg(protocol: dict[str, Any]) -> str:
     right_order = comparison.get("right_order", [])
     methods = list(dict.fromkeys(list(left_order) + list(right_order)))
     height = 120 + max(1, len(methods)) * 34
-    body = [f'<rect width="820" height="{height}" fill="#ffffff"/>', '<text class="label" x="30" y="30">Same-Environment vs CEP Ranking</text>']
+    body = [f'<rect width="820" height="{height}" fill="#ffffff"/>', '<text class="label" x="30" y="30">Same-Environment vs CPE Ranking</text>']
     body.append('<text class="small muted" x="30" y="52">Lines connect each method rank under the two protocols.</text>')
     x_left, x_right = 230, 590
     body.append(f'<text class="label" x="{x_left}" y="82" text-anchor="middle">Same Environment</text>')
-    body.append(f'<text class="label" x="{x_right}" y="82" text-anchor="middle">CEP</text>')
+    body.append(f'<text class="label" x="{x_right}" y="82" text-anchor="middle">CPE</text>')
     colors = ["#2563eb", "#059669", "#d97706", "#7c3aed", "#dc2626", "#0891b2", "#4b5563"]
     for index, method in enumerate(methods):
         left_rank = left_order.index(method) if method in left_order else len(methods)
@@ -339,7 +339,7 @@ def main() -> int:
     parser.add_argument(
         "--protocol-diagram-only",
         action="store_true",
-        help="Render only the data-free CEP protocol diagram. This does not require a study bundle.",
+        help="Render only the data-free CPE protocol diagram. This does not require a study bundle.",
     )
     parser.add_argument("--print-summary", action="store_true")
     args = parser.parse_args()

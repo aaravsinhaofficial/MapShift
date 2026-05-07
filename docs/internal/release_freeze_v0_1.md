@@ -9,8 +9,8 @@ Status: frozen 2D benchmark release. The ProcTHOR-compatible 3D files remain pro
 - Tier: `mapshift_2d`
 - Map size: 96x96 cells
 - Exploration budget: `T_exp=800` reward-free steps
-- Motifs: `simple_loop`, `two_room_connector`, `branching_chain`, `asymmetric_multi_room_chain`, `offset_bottleneck`, `nested_bottleneck`, `deceptive_shortcut`, `disconnected_subregion`
-- Splits: train uses `simple_loop`, `two_room_connector`, `branching_chain`; validation uses `asymmetric_multi_room_chain`, `offset_bottleneck`; test uses `nested_bottleneck`, `deceptive_shortcut`, `disconnected_subregion`
+- Motifs: `simple_loop`, `two_room_connector`, `branching_chain`, `asymmetric_multi_room_chain`, `offset_bottleneck`, `nested_bottleneck`, `deceptive_shortcut`, `disconnected_subregion`, `spiral_loop`, `ladder_loop`, `double_connector_rooms`, `zigzag_chain`, `forked_bottleneck`, `hub_spoke_deadends`, `parallel_corridor`, `ring_with_tail`, `offset_loop_bridge`, `split_hallway`, `braided_shortcut`, `narrow_gate_cluster`, `cul_de_sac_shortcut`, `island_bridge`, `broken_bridge_islands`, `asymmetric_loop_chain`
+- Splits: 10 train motifs, 6 validation motifs, and 8 held-out test motifs, as specified in `configs/env2d/release_v0_1.json`
 - Intervention families: metric, topology, dynamics, semantic
 - Severity levels: 0, 1, 2, 3 for every family
 - Task classes: planning, inference, adaptation
@@ -27,12 +27,15 @@ Status: frozen 2D benchmark release. The ProcTHOR-compatible 3D files remain pro
 - `oracle_post_intervention_planner`
 - `same_environment_upper_baseline`
 - `weak_heuristic_baseline`
+- `stale_map_planner` for deterministic mechanism diagnostics
+- `classical_belief_update_planner`
 - `monolithic_recurrent_world_model`
 - `persistent_memory_world_model`
 - `relational_graph_world_model`
 - `structured_dynamics_world_model`
+- `pretrained_structured_graph_world_model` as an append-only capacity row
 
-`prismx_reference_model` is intentionally omitted from the v0.1 main study because it is not implemented.
+`prismx_reference_model` is intentionally omitted from the v0.1 study because it is not implemented. Large-capacity rows such as `persistent_memory_world_model_large_v0_1` and `pretrained_structured_graph_world_model_1m_v0_1` are evaluated as add-ons so the original full-roster study does not need to be recomputed.
 
 ## Required Artifact Outputs
 

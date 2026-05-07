@@ -1,0 +1,19 @@
+{
+  "schema_version": "0.1.0",
+  "run_name": "persistent_memory_world_model_large_mapshift_2d_v0_1",
+  "baseline_name": "persistent_memory_world_model",
+  "seed": 0,
+  "exploration_budget_steps": 800,
+  "parameters": {
+    "memory_slots": 2048,
+    "slot_stride": 3,
+    "readout_width": 672,
+    "max_rollout_steps": 8,
+    "training_epochs": 120,
+    "learning_rate": 0.0005,
+    "validation_fraction": 0.2,
+    "early_stopping_patience": 20,
+    "checkpoint_dir": "/tmp/mapshift_persistent_memory_world_model_large",
+    "torch_device": "auto"
+  }
+}

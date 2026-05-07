@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-MapShift-2D v0.1 is a frozen benchmark and evaluation protocol for Counterfactual Embodied Planning (CEP).
+MapShift-2D v0.1 is a frozen benchmark and evaluation protocol for controlled post-intervention evaluation (CPE) of embodied world models.
 
 It evaluates whether an agent can:
 
