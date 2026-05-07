@@ -160,7 +160,7 @@ def _write_artifact_readme(output_dir: Path, release_name: str, study_config_pat
                 "- `splits/`: canonical motif split manifests and leakage report.",
                 "- `recipes/`: intervention and task recipe manifests generated from code.",
                 "- `health/`: benchmark health report generated before model results.",
-                "- `study/`: raw CPE/protocol reports plus study tables and figure data.",
+                "- `study/`: generated CPE/protocol reports plus study tables and figure data.",
                 "- `tables/` and `figures/`: paper-facing JSON outputs copied from the study bundle.",
                 "- `manifests/release_manifest.json`: top-level provenance for this artifact.",
                 "",

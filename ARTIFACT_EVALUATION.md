@@ -154,7 +154,7 @@ A healthy run reports zero task rejections, zero validator failures, reference s
 
 ## Capacity Add-On Runs
 
-These optional add-ons evaluate capacity rows on the CPE grid without rerunning the older baselines. An implicit oracle reference is still evaluated internally so oracle fields in the raw records remain populated. The generated reports contain all severities; the paper table reports the non-identity subset for these rows.
+These optional add-ons evaluate capacity rows on the CPE grid without rerunning the older baselines. An implicit oracle reference is still evaluated internally so oracle fields in the generated evaluation records remain populated. The generated reports contain all severities; the paper table reports the non-identity subset for these rows.
 
 Pretrained structured graph world model:
 
@@ -220,7 +220,7 @@ PY
 
 ## Full Reproduction
 
-The full run regenerates the paper-facing tables, figures, raw records, protocol comparisons, benchmark health reports, and provenance manifest:
+The full run generates the paper-facing tables, figures, evaluation records, protocol comparisons, benchmark health reports, and provenance manifest from the tracked code and configs:
 
 ```bash
 python3 scripts/build_benchmark.py \
@@ -251,7 +251,7 @@ The full config runs one primary CPE sweep (`cep` protocol id) plus four protoco
 | Severity-response curves | `outputs/releases/mapshift_2d_v0_1_full/study/tables/severity_response.json` and `paper_outputs/figures/severity_response_curves.svg` |
 | Deterministic mechanism diagnostic | `outputs/studies/mapshift_2d_belief_update_diagnostic_v0_1/study_bundle.json` |
 | High-capacity learned add-ons | `outputs/studies/pretrained_structured_graph_world_model_1m_v0_1/cep_report.json` and `outputs/studies/persistent_memory_world_model_large_v0_1/cep_report.json` |
-| Raw episode records | `study/raw/cep_report.json` and `study/raw/protocol_comparison_report.json` |
+| Generated episode records | `study/raw/cep_report.json` and `study/raw/protocol_comparison_report.json` |
 | Rendered tables/figures | `outputs/releases/<run_name>/paper_outputs/` |
 
 Regenerate rendered Markdown/SVG outputs from an existing bundle:

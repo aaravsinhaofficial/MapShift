@@ -19,7 +19,7 @@ This file is an internal status snapshot, not a reviewer runbook. The reviewer-f
 - Root README, artifact evaluation guide, license, citation metadata, and dependency pins are present.
 - Canonical benchmark, environment, intervention, task, baseline, analysis, and schema configs are tracked.
 - Smoke/full reproduction, deterministic mechanism diagnostic, MiniGrid sanity-transfer, and capacity add-on commands are documented.
-- Release builder writes configs, split manifests, intervention/task recipes, benchmark health, raw study records, family-wise tables, protocol comparisons, rendered Markdown/SVG outputs, and provenance manifests.
+- Release builder can generate configs, split manifests, intervention/task recipes, benchmark health, study records, family-wise tables, protocol comparisons, rendered Markdown/SVG outputs, and provenance manifests.
 - Validation tooling covers schema loading, split leakage, intervention validators, task rejection accounting, benchmark-health checks, metrics/reporting, MiniGrid adapter behavior, and integration-level study execution.
 - The ProcTHOR-compatible code is documented as prototype/future work and excluded from the frozen v0.1 scientific claim.
 

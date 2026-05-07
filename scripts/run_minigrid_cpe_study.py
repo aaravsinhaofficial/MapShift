@@ -21,7 +21,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--output-dir",
         default="outputs/studies/minigrid_cpe_sanity_transfer",
-        help="Directory for study bundle, tables, and raw records.",
+        help="Directory for study bundle, tables, and generated records.",
     )
     parser.add_argument("--seeds-per-motif", type=int, default=4, help="Number of deterministic seeds per MiniGrid motif.")
     parser.add_argument(

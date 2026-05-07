@@ -39,7 +39,7 @@ Status: frozen 2D benchmark release. The ProcTHOR-compatible 3D files remain pro
 
 ## Required Artifact Outputs
 
-The release builder writes configs, split manifests, intervention and task recipes, benchmark health, raw study records, family-wise tables, protocol comparisons, severity curves, rendered Markdown tables, SVG figures, and a top-level release manifest.
+The release builder can generate configs, split manifests, intervention and task recipes, benchmark health, study records, family-wise tables, protocol comparisons, severity curves, rendered Markdown tables, SVG figures, and a top-level release manifest.
 
 Canonical reviewer smoke:
 
