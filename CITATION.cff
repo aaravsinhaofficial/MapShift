@@ -1,8 +1,9 @@
 cff-version: 1.2.0
-message: "If you use MapShift, please cite the associated NeurIPS Evaluations & Datasets submission."
+message: "If you use MapShift, please cite the NeurIPS 2026 paper below."
 title: "MapShift: Controlled Post-Intervention Evaluation for Embodied World Models"
 authors:
-  - name: "MapShift Authors"
+  - family-names: Sinha
+    given-names: Aarav
 version: "0.1.0"
 date-released: "2026-05-03"
 license: "MIT"
@@ -13,3 +14,12 @@ keywords:
   - world models
   - post-intervention evaluation
 abstract: "MapShift is an executable benchmark and evaluation protocol for measuring whether exploration-derived environment knowledge remains useful after controlled metric, topology, dynamics, and semantic interventions."
+preferred-citation:
+  type: conference-paper
+  authors:
+    - family-names: Sinha
+      given-names: Aarav
+  title: "MapShift: Controlled Post-Intervention Evaluation for Embodied World Models"
+  collection-title: "Advances in Neural Information Processing Systems"
+  year: 2026
+  url: https://neurips.cc/virtual/2026/loc/sydney/poster/139852
