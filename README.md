@@ -2,7 +2,7 @@
 
 Aarav Sinha · NeurIPS 2026, Evaluations and Datasets Track
 
-[Paper (PDF)](https://aaravsinha.dev/data/mapshift-neurips-2026.pdf) · [Conference page](https://neurips.cc/virtual/2026/loc/sydney/poster/139852)
+[Camera-ready paper (PDF)](paper.pdf) · [Conference page](https://neurips.cc/virtual/2026/loc/sydney/poster/139852)
 
 Can an agent find a detour when a familiar passage closes? In MapShift, an agent explores without reward, then faces planning, inference, or adaptation tasks after one property of the world changes. Each edited world is paired with its unchanged counterpart. This controlled post-intervention evaluation (CPE) tests changes in distance, connectivity, movement dynamics, or the meaning of cues.
 
@@ -29,11 +29,15 @@ The smoke study uses severity 0 (no change) and writes tables and figures to `ou
 
 ## Selected results
 
-**MapShift-2D.** On eight held-out layouts, updating the map scored 0.102 higher than reusing it in unchanged worlds. The gap grew to **0.304** when routes changed and **0.724** when cue meanings changed. [Figure 3](https://aaravsinha.dev/data/mapshift-neurips-2026.pdf#page=7)
+**MapShift-2D (Figure 3).** Across eight held-out layouts, updating the map scored 0.102 higher than reusing it when the world stayed the same. The gap grew to **0.304** when routes changed and **0.724** when cue meanings changed.
 
-![Figure 3. Planning ranks and the score advantage of map updating under unchanged-world evaluation and CPE.](docs/figures/protocol-comparison.png)
+![Figure 3. Planning ranks under the two protocols and the score advantage of updating the map on held-out layouts.](docs/figures/protocol-comparison.png)
 
-**ProcTHOR.** Across 371 held-out houses, local updating and reusing the old map had nearly identical navigation success when the target stayed put. After it moved, success was **64.1%** with local updating and **10.9%** with the old map, a paired gain of 53.2 percentage points (95% CI 50.1 to 56.2). Moving the target also reversed which of two map representations worked better with the same learned model and planner. [Figure 4](https://aaravsinha.dev/data/mapshift-neurips-2026.pdf#page=9)
+**ProcTHOR (Figure 4).** Across 371 held-out houses, local updating and reusing the old map had nearly identical navigation success when the target stayed put. After it moved, success was **64.1%** with local updating and **10.9%** with the old map, a paired gain of 53.2 percentage points (95% CI 50.1 to 56.2).
+
+With the learned model and planner held fixed, the system that wrote observations directly into its map led by 4.1 percentage points in unchanged houses. After relocation, the system that reconstructed its map from recurrent state led by 22.4 points.
+
+![Figure 4. Target relocation increases the benefit of local map updates and reverses the ranking of two ways to build the learned model’s planning map.](docs/figures/procthor-target-relocation.png)
 
 ## Citation
 
